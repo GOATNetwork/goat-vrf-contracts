@@ -540,23 +540,8 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         // Calculate fee using fee rule
         totalFee = IFeeRule(_config.feeRule).calculateFee(requester, totalGasUsed);
 
-        IERC20 token = IERC20(_config.wgoatbtcToken);
-
-        // Get current allowance
-        uint256 allowance = token.allowance(requester, address(this));
-        uint256 balance = token.balanceOf(requester);
-
-        // User must have enough allowance and balance to cover fee
-        if (allowance < totalFee) {
-            revert InsufficientAllowance(allowance, totalFee);
-        }
-
-        if (balance < totalFee) {
-            revert InsufficientBalance(balance, totalFee);
-        }
-
         // Transfer tokens
-        bool success = token.transferFrom(requester, _config.feeRecipient, totalFee);
+        bool success = IERC20(_config.wgoatbtcToken).transferFrom(requester, _config.feeRecipient, totalFee);
         if (!success) {
             revert PaymentProcessingFailed(0, "Transfer failed");
         }

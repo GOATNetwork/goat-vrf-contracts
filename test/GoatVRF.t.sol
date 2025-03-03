@@ -53,6 +53,7 @@ contract MockWGOATBTC is IERC20 {
 
     function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
         require(_allowances[sender][msg.sender] >= amount, "ERC20: transfer amount exceeds allowance");
+        require(_balances[sender] >= amount, "Transfer amount exceeds balance");
         _allowances[sender][msg.sender] -= amount;
         _balances[sender] -= amount;
         _balances[recipient] += amount;
@@ -842,7 +843,7 @@ contract GoatVRFTest is Test {
 
         // Fulfillment should revert due to insufficient allowance
         vm.startPrank(relayer);
-        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InsufficientAllowance.selector, 0, FIXED_FEE));
+        vm.expectRevert("ERC20: transfer amount exceeds allowance");
         goatVRF.fulfillRequest(requestId, user, maxAllowedGasPrice, callbackGas, round, new bytes(96));
         vm.stopPrank();
     }
@@ -870,7 +871,7 @@ contract GoatVRFTest is Test {
 
         // Fulfillment should revert due to insufficient balance
         vm.startPrank(relayer);
-        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InsufficientBalance.selector, 0, FIXED_FEE));
+        vm.expectRevert("Transfer amount exceeds balance");
         goatVRF.fulfillRequest(requestId, user, maxAllowedGasPrice, callbackGas, round, new bytes(96));
         vm.stopPrank();
     }
