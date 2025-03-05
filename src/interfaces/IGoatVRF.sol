@@ -29,6 +29,7 @@ interface IGoatVRF {
     error InsufficientBalance(uint256 balance, uint256 required);
     error InvalidRequestHash(bytes32 requestHash);
     error InsufficientGasForCallback(uint256 requiredGas, uint256 remainingGas);
+    error InvalidCallbackGas(uint256 callbackGas);
 
     /**
      * @dev Emitted when any configuration is updated

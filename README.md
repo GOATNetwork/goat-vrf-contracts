@@ -191,9 +191,9 @@ GOAT VRF supports two types of fee rules:
 |-----------------------|---------------------------------------------------------------|
 | Fee Token             | 0xbC10000000000000000000000000000000000000                     |
 | Beacon Type           | BN254                                                         |
-| Beacon                | 0x64Ce86f32545d3CDA9c1330F04E006fA23bF42B4                     |
+| Beacon                | 0x5FdB524cB7a66EE226Fc9ae475DAf0151055BF22                     |
 | Fee Rule Type         | APRO_BTC                                                      |
-| Fee Rule              | 0x7F196509D842249363FD32C94681cEbc63E41031                     |
+| Fee Rule              | 0xeBE7471D170996D60d271E2c3B194751e7B236A2                     |
 | Target Value          | 10000000                                                      |
 | Price Feed            | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef                     |
 | Fee Recipient         | 0xF51d148D4A7ae851c1d5641763081023938c6342                     |
@@ -201,7 +201,7 @@ GOAT VRF supports two types of fee rules:
 | Overhead Gas          | 200000                                                        |
 | Max Deadline Delta    | 604800                                                        |
 | Request Expire Time   | 604800                                                        |
-| GoatVRF Proxy         | 0xC1237429ddF8bE9a1568721007FD843d3B63166C                     |
+| GoatVRF Proxy         | 0x9ed0FB1dd76E06f5c72a066676237fcaACB6AEC9                     |
 
 - **Mainnet**: `TBD`
 

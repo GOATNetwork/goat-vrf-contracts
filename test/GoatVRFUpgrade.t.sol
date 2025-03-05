@@ -33,6 +33,7 @@ contract GoatVRFUpgradeTest is Test {
     uint256 public constant OVERHEAD_GAS = 50000;
     uint256 public constant MAX_DEADLINE_DELTA = 7 days;
     uint256 public constant REQUEST_EXPIRE_TIME = 7 days;
+    uint256 public constant MAX_CALLBACK_GAS = 20000000;
 
     // Implementation slot from ERC1967
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
@@ -63,7 +64,8 @@ contract GoatVRFUpgradeTest is Test {
                 address(feeRule),
                 MAX_DEADLINE_DELTA,
                 OVERHEAD_GAS,
-                REQUEST_EXPIRE_TIME
+                REQUEST_EXPIRE_TIME,
+                MAX_CALLBACK_GAS
             ),
             opts
         );

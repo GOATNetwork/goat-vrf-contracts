@@ -35,6 +35,7 @@ contract Deploy is Script {
         address feeToken = vm.envAddress("FEE_TOKEN");
         address feeRecipient = vm.envAddress("FEE_RECIPIENT");
         address relayer = vm.envAddress("RELAYER_ADDRESS");
+        uint256 maxCallbackGas = vm.envUint("MAX_CALLBACK_GAS");
 
         // Fee rule type configuration
         string memory feeRuleType = vm.envString("FEE_RULE_TYPE"); // "FIXED" or "APRO_BTC"
@@ -106,7 +107,8 @@ contract Deploy is Script {
                 feeRule, // feeRule
                 maxDeadlineDelta, // maxDeadlineDelta
                 overheadGas, // overheadGas
-                requestExpireTime // requestExpireTime
+                requestExpireTime, // requestExpireTime
+                maxCallbackGas // maxCallbackGas
             ),
             opts
         );
@@ -184,6 +186,15 @@ contract Deploy is Script {
             }
         } catch {
             console.log("[ERROR] Failed to get request expire time from proxy");
+        }
+
+        try proxyContract.maxCallbackGas() returns (uint256 gas) {
+            console.log("Max Callback Gas from proxy:", gas);
+            if (gas != maxCallbackGas) {
+                console.log("[WARNING] Max callback gas mismatch!");
+            }
+        } catch {
+            console.log("[ERROR] Failed to get max callback gas from proxy");
         }
 
         // Check if the proxy is correctly set up

@@ -358,6 +358,7 @@ contract GoatVRFTest is Test {
     uint256 public constant OVERHEAD_GAS = 50000;
     uint256 public constant MAX_DEADLINE_DELTA = 7 days;
     uint256 public constant REQUEST_EXPIRE_TIME = 7 days;
+    uint256 public constant MAX_CALLBACK_GAS = 20000000;
 
     event RandomnessRequested(
         uint256 indexed requestId,
@@ -388,7 +389,8 @@ contract GoatVRFTest is Test {
             address(feeRule),
             MAX_DEADLINE_DELTA,
             OVERHEAD_GAS,
-            REQUEST_EXPIRE_TIME
+            REQUEST_EXPIRE_TIME,
+            MAX_CALLBACK_GAS
         );
 
         vm.stopPrank();
@@ -426,6 +428,25 @@ contract GoatVRFTest is Test {
 
         // Verify request state
         assertEq(uint256(goatVRF.getRequestState(requestId)), uint256(IGoatVRF.RequestState.Pending));
+    }
+
+    function testRequestWithInvalidCallbackGas() public {
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 maxAllowedGasPrice = 100 gwei;
+
+        // Approve tokens for fee
+        uint256 fee = goatVRF.calculateFee(0);
+        token.approve(address(goatVRF), fee);
+
+        // Too much gas
+        uint256 tooMuchGas = 6000000000000;
+        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidCallbackGas.selector, tooMuchGas));
+        goatVRF.getNewRandom(deadline, maxAllowedGasPrice, tooMuchGas);
+
+        // Too little gas
+        uint256 tooLittleGas = 0;
+        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidCallbackGas.selector, tooLittleGas));
+        goatVRF.getNewRandom(deadline, maxAllowedGasPrice, tooLittleGas);
     }
 
     function testRequestRandomnessWithInvalidDeadline() public {

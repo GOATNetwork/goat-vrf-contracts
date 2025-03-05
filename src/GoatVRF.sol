@@ -41,6 +41,8 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         uint256 overheadGas;
         // Request expiration time (in seconds)
         uint256 requestExpireTime;
+        // Maximum callback gas amount
+        uint256 maxCallbackGas;
     }
 
     // Main configuration
@@ -87,7 +89,8 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         address feeRule_,
         uint256 maxDeadlineDelta_,
         uint256 overheadGas_,
-        uint256 requestExpireTime_
+        uint256 requestExpireTime_,
+        uint256 maxCallbackGas_
     ) external initializer {
         // Initialize parent contracts
         __Ownable_init(msg.sender);
@@ -113,6 +116,9 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         if (requestExpireTime_ == 0) {
             revert InvalidRequestExpireTime(requestExpireTime_);
         }
+        if (maxCallbackGas_ == 0) {
+            revert InvalidCallbackGas(maxCallbackGas_);
+        }
 
         // Set configuration
         _config.beacon = beacon_;
@@ -124,6 +130,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         _config.nextRequestId = 1;
         _config.overheadGas = overheadGas_;
         _config.requestExpireTime = requestExpireTime_;
+        _config.maxCallbackGas = maxCallbackGas_;
 
         // Emit events
         emit ConfigUpdated("beacon", abi.encode(beacon_));
@@ -134,6 +141,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         emit ConfigUpdated("maxDeadlineDelta", abi.encode(maxDeadlineDelta_));
         emit ConfigUpdated("overheadGas", abi.encode(overheadGas_));
         emit ConfigUpdated("requestExpireTime", abi.encode(requestExpireTime_));
+        emit ConfigUpdated("maxCallbackGas", abi.encode(maxCallbackGas_));
     }
 
     /**
@@ -182,6 +190,14 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      */
     function maxDeadlineDelta() external view returns (uint256 maxDelta) {
         return _config.maxDeadlineDelta;
+    }
+
+    /**
+     * @dev Get the maximum callback gas amount
+     * @return callbackGas The maximum callback gas amount
+     */
+    function maxCallbackGas() external view returns (uint256 callbackGas) {
+        return _config.maxCallbackGas;
     }
 
     /**
@@ -307,6 +323,10 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @param maxDeadlineDelta_ New maximum deadline delta
      */
     function setMaxDeadlineDelta(uint256 maxDeadlineDelta_) external onlyOwner {
+        if (maxDeadlineDelta_ == 0) {
+            revert InvalidMaxDeadlineDelta(maxDeadlineDelta_);
+        }
+
         _config.maxDeadlineDelta = maxDeadlineDelta_;
         emit ConfigUpdated("maxDeadlineDelta", abi.encode(maxDeadlineDelta_));
     }
@@ -330,6 +350,18 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         }
         _config.requestExpireTime = requestExpireTime_;
         emit ConfigUpdated("requestExpireTime", abi.encode(requestExpireTime_));
+    }
+
+    /**
+     * @dev Set the maximum callback gas amount
+     * @param maxCallbackGas_ The new maximum callback gas amount
+     */
+    function setMaxCallbackGas(uint256 maxCallbackGas_) external onlyOwner {
+        if (maxCallbackGas_ == 0) {
+            revert InvalidCallbackGas(maxCallbackGas_);
+        }
+        _config.maxCallbackGas = maxCallbackGas_;
+        emit ConfigUpdated("maxCallbackGas", abi.encode(maxCallbackGas_));
     }
 
     /**
@@ -374,6 +406,16 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         nonReentrant
         returns (uint256 requestId)
     {
+        // Validate callback gas
+        if (callbackGas > _config.maxCallbackGas || callbackGas == 0) {
+            revert InvalidCallbackGas(callbackGas);
+        }
+
+        // Validate max allowed gas price
+        if (maxAllowedGasPrice == 0) {
+            revert InvalidGasPrice(maxAllowedGasPrice);
+        }
+
         // Get beacon information
         IDrandBeacon drandBeacon = IDrandBeacon(_config.beacon);
         uint256 genesis = drandBeacon.genesisTimestamp();
@@ -390,11 +432,6 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         // Calculate round from deadline
         uint256 delta = deadline - genesis;
         uint256 round = (delta / period) + ((delta % period > 0) ? 1 : 0);
-
-        // Validate max allowed gas price
-        if (maxAllowedGasPrice == 0) {
-            revert InvalidGasPrice(maxAllowedGasPrice);
-        }
 
         // Calculate the fixed fee for the request
         uint256 intrinsicFee = IFeeRule(_config.feeRule).calculateFee(msg.sender, 0);
