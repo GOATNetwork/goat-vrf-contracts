@@ -402,7 +402,7 @@ contract GoatVRFTest is Test {
 
     function testInitialization() public view {
         assertEq(goatVRF.beacon(), address(mockBeacon));
-        assertEq(goatVRF.wgoatbtcToken(), address(token));
+        assertEq(goatVRF.feeToken(), address(token));
         assertEq(goatVRF.feeRecipient(), feeRecipient);
         assertEq(goatVRF.relayer(), relayer);
         assertEq(goatVRF.feeRule(), address(feeRule));
@@ -710,11 +710,11 @@ contract GoatVRFTest is Test {
         goatVRF.setBeacon(newBeacon);
         assertEq(goatVRF.beacon(), newBeacon);
 
-        // Test setWgoatbtcToken
+        // Test setFeeToken
         vm.expectEmit(true, true, true, true);
         emit ConfigUpdated("token", abi.encode(newToken));
-        goatVRF.setWgoatbtcToken(newToken);
-        assertEq(goatVRF.wgoatbtcToken(), newToken);
+        goatVRF.setFeeToken(newToken);
+        assertEq(goatVRF.feeToken(), newToken);
 
         // Test setFeeRecipient
         vm.expectEmit(true, true, true, true);
@@ -765,7 +765,7 @@ contract GoatVRFTest is Test {
 
         // Test invalid token
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidToken.selector, address(0)));
-        goatVRF.setWgoatbtcToken(address(0));
+        goatVRF.setFeeToken(address(0));
 
         // Test invalid fee recipient
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidFeeRecipient.selector, address(0)));
@@ -797,7 +797,7 @@ contract GoatVRFTest is Test {
         goatVRF.setBeacon(address(0x1111));
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
-        goatVRF.setWgoatbtcToken(address(0x1111));
+        goatVRF.setFeeToken(address(0x1111));
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
         goatVRF.setFeeRecipient(address(0x1111));

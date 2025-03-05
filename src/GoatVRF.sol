@@ -25,8 +25,8 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
     struct GoatVRFConfig {
         // Current beacon address
         address beacon;
-        // WGOATBTC token address
-        address wgoatbtcToken;
+        // Fee token address
+        address feeToken;
         // Fee recipient address
         address feeRecipient;
         // Authorized relayer address
@@ -71,7 +71,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
     /**
      * @dev Initializer function (replaces constructor in upgradeable contracts)
      * @param beacon_ Address of the drand beacon
-     * @param wgoatbtcToken_ Address of the WGOATBTC token
+     * @param feeToken_ Address of the ERC20 token to pay the fee
      * @param feeRecipient_ Address of the fee recipient
      * @param relayer_ Address of the authorized relayer
      * @param feeRule_ Address of the fee rule contract
@@ -81,7 +81,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      */
     function initialize(
         address beacon_,
-        address wgoatbtcToken_,
+        address feeToken_,
         address feeRecipient_,
         address relayer_,
         address feeRule_,
@@ -98,8 +98,8 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         if (beacon_ == address(0)) {
             revert InvalidBeacon(beacon_);
         }
-        if (wgoatbtcToken_ == address(0)) {
-            revert InvalidToken(wgoatbtcToken_);
+        if (feeToken_ == address(0)) {
+            revert InvalidToken(feeToken_);
         }
         if (feeRecipient_ == address(0)) {
             revert InvalidFeeRecipient(feeRecipient_);
@@ -116,7 +116,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
 
         // Set configuration
         _config.beacon = beacon_;
-        _config.wgoatbtcToken = wgoatbtcToken_;
+        _config.feeToken = feeToken_;
         _config.feeRecipient = feeRecipient_;
         _config.relayer = relayer_;
         _config.feeRule = feeRule_;
@@ -127,7 +127,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
 
         // Emit events
         emit ConfigUpdated("beacon", abi.encode(beacon_));
-        emit ConfigUpdated("token", abi.encode(wgoatbtcToken_));
+        emit ConfigUpdated("feeToken", abi.encode(feeToken_));
         emit ConfigUpdated("feeRecipient", abi.encode(feeRecipient_));
         emit ConfigUpdated("relayer", abi.encode(relayer_));
         emit ConfigUpdated("feeRule", abi.encode(feeRule_));
@@ -145,11 +145,11 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     /**
-     * @dev Get the current WGOATBTC token address
+     * @dev Get the current fee token address
      * @return tokenAddr The token address
      */
-    function wgoatbtcToken() external view override returns (address tokenAddr) {
-        return _config.wgoatbtcToken;
+    function feeToken() external view override returns (address tokenAddr) {
+        return _config.feeToken;
     }
 
     /**
@@ -258,11 +258,11 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @dev Set new token address
      * @param token_ New token address
      */
-    function setWgoatbtcToken(address token_) external onlyOwner {
+    function setFeeToken(address token_) external onlyOwner {
         if (token_ == address(0)) {
             revert InvalidToken(token_);
         }
-        _config.wgoatbtcToken = token_;
+        _config.feeToken = token_;
         emit ConfigUpdated("token", abi.encode(token_));
     }
 
@@ -400,7 +400,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         uint256 intrinsicFee = IFeeRule(_config.feeRule).calculateFee(msg.sender, 0);
 
         // Check user's allowance and balance for the fixed fee
-        IERC20 token = IERC20(_config.wgoatbtcToken);
+        IERC20 token = IERC20(_config.feeToken);
         uint256 allowance = token.allowance(msg.sender, address(this));
         uint256 balance = token.balanceOf(msg.sender);
 
@@ -541,7 +541,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         totalFee = IFeeRule(_config.feeRule).calculateFee(requester, totalGasUsed);
 
         // Transfer tokens
-        bool success = IERC20(_config.wgoatbtcToken).transferFrom(requester, _config.feeRecipient, totalFee);
+        bool success = IERC20(_config.feeToken).transferFrom(requester, _config.feeRecipient, totalFee);
         if (!success) {
             revert PaymentProcessingFailed(0, "Transfer failed");
         }

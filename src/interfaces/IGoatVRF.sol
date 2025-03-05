@@ -128,10 +128,10 @@ interface IGoatVRF {
     function beacon() external view returns (address beaconAddr);
 
     /**
-     * @dev Get the current WGOATBTC token address
+     * @dev Get the current erc20 fee token address
      * @return tokenAddr The token address
      */
-    function wgoatbtcToken() external view returns (address tokenAddr);
+    function feeToken() external view returns (address tokenAddr);
 
     /**
      * @dev Get the state of a randomness request

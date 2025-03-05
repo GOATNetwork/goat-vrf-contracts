@@ -45,7 +45,7 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
      */
     function getNewRandom(uint256 maxAllowedGasPrice) external onlyOwner returns (uint256 requestId) {
         // Get the WGOATBTC token address from GoatVRF
-        address tokenAddress = IGoatVRF(goatVRF).wgoatbtcToken();
+        address tokenAddress = IGoatVRF(goatVRF).feeToken();
 
         // Calculate fee with sufficient gas for callback
         // The callback is simple, but we allocate extra gas to be safe

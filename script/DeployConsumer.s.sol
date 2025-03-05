@@ -22,13 +22,13 @@ contract DeployConsumer is Script {
         RandomnessConsumer consumer = new RandomnessConsumer(goatVRFAddress);
         console.log("RandomnessConsumer deployed at:", address(consumer));
 
-        // Get the WGOATBTC token address from GoatVRF
-        address tokenAddress = IGoatVRF(goatVRFAddress).wgoatbtcToken();
-        console.log("WGOATBTC token address:", tokenAddress);
+        // Get the fee token address from GoatVRF
+        address tokenAddress = IGoatVRF(goatVRFAddress).feeToken();
+        console.log("Fee token address:", tokenAddress);
 
         // Get the balance of the token
         uint256 balance = IERC20(tokenAddress).balanceOf(msg.sender);
-        console.log("WGOATBTC balance:", balance);
+        console.log("Fee token balance:", balance);
 
         // Set max gas price and gas used for estimation
         uint256 estimatedGasUsed = 600000;

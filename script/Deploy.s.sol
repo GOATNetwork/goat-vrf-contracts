@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import "forge-std/Script.sol";
 import "../src/GoatVRF.sol";
 import "../src/FixedFeeRule.sol";
+import "../src/APROBTCFeeRule.sol";
 import "../src/BN254DrandBeacon.sol";
 import "../src/BLS12381DrandBeacon.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -31,17 +32,17 @@ contract Deploy is Script {
     function run() external {
         // Load configuration from environment variables
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address wgoatbtcAddress = vm.envAddress("WGOATBTC_ADDRESS");
+        address feeToken = vm.envAddress("FEE_TOKEN");
         address feeRecipient = vm.envAddress("FEE_RECIPIENT");
         address relayer = vm.envAddress("RELAYER_ADDRESS");
 
-        // FixedFeeRule configuration
-        uint256 fixedFee = vm.envUint("FIXED_FEE"); // in wei
-        uint256 overheadGas = vm.envUint("OVERHEAD_GAS");
+        // Fee rule type configuration
+        string memory feeRuleType = vm.envString("FEE_RULE_TYPE"); // "FIXED" or "APRO_BTC"
 
         // GoatVRF configuration
         uint256 maxDeadlineDelta = vm.envUint("MAX_DEADLINE_DELTA"); // in seconds
         uint256 requestExpireTime = vm.envUint("REQUEST_EXPIRE_TIME"); // in seconds
+        uint256 overheadGas = vm.envUint("OVERHEAD_GAS");
 
         // Beacon configuration
         string memory beaconType = vm.envString("BEACON_TYPE"); // "BN254" or "BLS12381"
@@ -66,10 +67,27 @@ contract Deploy is Script {
         }
         console.log("Beacon deployed at:", beacon);
 
-        // Deploy FixedFeeRule
+        // Deploy appropriate fee rule based on configuration
+        address feeRule;
         console.log("Deploying fee rule...");
-        FixedFeeRule feeRule = new FixedFeeRule(fixedFee);
-        console.log("Fee rule deployed at:", address(feeRule));
+
+        if (keccak256(bytes(feeRuleType)) == keccak256(bytes("FIXED"))) {
+            // Deploy FixedFeeRule
+            // FixedFeeRule configuration
+            uint256 fixedFee = vm.envUint("FIXED_FEE"); // in wei
+            feeRule = address(new FixedFeeRule(fixedFee));
+            console.log("Fixed Fee Rule deployed at:", feeRule);
+        } else if (keccak256(bytes(feeRuleType)) == keccak256(bytes("APRO_BTC"))) {
+            // Load APRO BTC FeeRule configuration
+            uint256 targetValue = vm.envUint("TARGET_VALUE");
+            address priceFeed = vm.envAddress("PRICE_FEED");
+
+            // Deploy APROBTCFeeRule
+            feeRule = address(new APROBTCFeeRule(targetValue, feeToken, priceFeed));
+            console.log("APRO BTC Fee Rule deployed at:", feeRule);
+        } else {
+            revert("Invalid fee rule type");
+        }
 
         // Deploy proxy
         console.log("Deploying proxy...");
@@ -82,10 +100,10 @@ contract Deploy is Script {
             abi.encodeWithSelector(
                 GoatVRF.initialize.selector,
                 beacon, // beacon
-                wgoatbtcAddress, // wgoatbtcToken
+                feeToken, // feeToken
                 feeRecipient, // feeRecipient
                 relayer, // relayer
-                address(feeRule), // feeRule
+                feeRule, // feeRule
                 maxDeadlineDelta, // maxDeadlineDelta
                 overheadGas, // overheadGas
                 requestExpireTime // requestExpireTime
@@ -98,13 +116,13 @@ contract Deploy is Script {
         console.log("Verifying proxy initialization...");
         GoatVRF proxyContract = GoatVRF(address(proxy));
 
-        try proxyContract.wgoatbtcToken() returns (address tokenAddr) {
+        try proxyContract.feeToken() returns (address tokenAddr) {
             console.log("[SUCCESS] Proxy initialized successfully!");
-            console.log("WGOATBTC Token from proxy:", tokenAddr);
+            console.log("Fee Token from proxy:", tokenAddr);
 
-            if (tokenAddr != wgoatbtcAddress) {
+            if (tokenAddr != feeToken) {
                 console.log("[WARNING] Token address mismatch!");
-                console.log("Expected:", wgoatbtcAddress);
+                console.log("Expected:", feeToken);
                 console.log("Actual:", tokenAddr);
             }
         } catch Error(string memory reason) {
@@ -143,7 +161,7 @@ contract Deploy is Script {
 
         try proxyContract.feeRule() returns (address feeRuleAddr) {
             console.log("Fee Rule from proxy:", feeRuleAddr);
-            if (feeRuleAddr != address(feeRule)) {
+            if (feeRuleAddr != feeRule) {
                 console.log("[WARNING] Fee rule address mismatch!");
             }
         } catch {
@@ -175,13 +193,24 @@ contract Deploy is Script {
 
         console.log("Deployment Summary:");
         console.log("-------------------");
-        console.log("WGOATBTC:", wgoatbtcAddress);
+        console.log("Fee Token:", feeToken);
         console.log("Beacon Type:", beaconType);
         console.log("Beacon:", beacon);
-        console.log("FeeRule:", address(feeRule));
+        console.log("Fee Rule Type:", feeRuleType);
+        console.log("Fee Rule:", feeRule);
+
+        if (keccak256(bytes(feeRuleType)) == keccak256(bytes("FIXED"))) {
+            uint256 fixedFee = vm.envUint("FIXED_FEE"); // in wei
+            console.log("Fixed Fee:", fixedFee);
+        } else if (keccak256(bytes(feeRuleType)) == keccak256(bytes("APRO_BTC"))) {
+            uint256 targetValue = vm.envUint("TARGET_VALUE");
+            address priceFeed = vm.envAddress("PRICE_FEED");
+            console.log("Target Value:", targetValue);
+            console.log("Price Feed:", priceFeed);
+        }
+
         console.log("Fee Recipient:", feeRecipient);
         console.log("Relayer:", relayer);
-        console.log("Fixed Fee:", fixedFee);
         console.log("Overhead Gas:", overheadGas);
         console.log("Max Deadline Delta:", maxDeadlineDelta);
         console.log("Request Expire Time:", requestExpireTime);

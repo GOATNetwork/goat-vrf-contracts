@@ -35,8 +35,8 @@ contract MyRandomContract is IRandomnessCallback {
      * @return requestId Unique identifier for the request
      */
     function getRandom() external returns (uint256 requestId) {
-        // Get the WGOATBTC token address from GoatVRF
-        address tokenAddress = IGoatVRF(goatVRF).wgoatbtcToken();
+        // Get the fee token address from GoatVRF
+        address tokenAddress = IGoatVRF(goatVRF).feeToken();
         IERC20 token = IERC20(tokenAddress);
         // How much gas will be used for callback
         uint256 callbackGas = 600000;
@@ -104,7 +104,7 @@ interface IGoatVRF {
 
    function beacon() external view returns (address beaconAddr);
 
-   function wgoatbtcToken() external view returns (address tokenAddr);
+   function feeToken() external view returns (address tokenAddr);
 }
 ```
 
@@ -141,7 +141,7 @@ Before requesting randomness, you must approve the GoatVRF contract to spend you
 
 ```solidity
 // Get token address
-address tokenAddress = IGoatVRF(goatVRF).wgoatbtcToken();
+address tokenAddress = IGoatVRF(goatVRF).feeToken();
 IERC20 token = IERC20(tokenAddress);
 
 // Approve fee
@@ -172,23 +172,36 @@ forge test
 forge script script/Deploy.s.sol --rpc-url <your_rpc_url> --private-key <your_private_key>
 ```
 
+## Fee Rule Types
+
+GOAT VRF supports two types of fee rules:
+
+1. **Fixed Fee Rule**: A simple fixed fee plus gas cost model.
+   - Configuration: Set `FEE_RULE_TYPE=FIXED` and `FIXED_FEE=amount` in your environment.
+
+2. **APRO BTC Fee Rule**: A dynamic fee model based on APRO price feed for BTC/USD.
+   - Configuration: Set `FEE_RULE_TYPE=APRO_BTC`, `TARGET_VALUE=amount` (in USD with 8 decimals), and `PRICE_FEED=address` in your environment.
+   - This allows the fee to adjust automatically based on the current BTC price to maintain a consistent USD value.
+
 ## Contract Deployments
 
 - **Testnet**: 
 
 | Property              | Value                                                         |
 |-----------------------|---------------------------------------------------------------|
-| WGOATBTC              | 0xbC10000000000000000000000000000000000000                     |
+| Fee Token             | 0xbC10000000000000000000000000000000000000                     |
 | Beacon Type           | BN254                                                         |
-| Beacon                | 0x3680CdB9987985E656802c783796a96d3D474fA5                     |
-| FeeRule               | 0x2Ec3E4b689bA7eb3B62e8fF92501FDed36629351                     |
+| Beacon                | 0x64Ce86f32545d3CDA9c1330F04E006fA23bF42B4                     |
+| Fee Rule Type         | APRO_BTC                                                      |
+| Fee Rule              | 0x7F196509D842249363FD32C94681cEbc63E41031                     |
+| Target Value          | 10000000                                                      |
+| Price Feed            | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef                     |
 | Fee Recipient         | 0xF51d148D4A7ae851c1d5641763081023938c6342                     |
 | Relayer               | 0x5C71d12522c454689A6A1653A99A44Bd5Fa4A65B                     |
-| Fixed Fee             | 1000000000000                                                 |
 | Overhead Gas          | 200000                                                        |
 | Max Deadline Delta    | 604800                                                        |
 | Request Expire Time   | 604800                                                        |
-| GoatVRF Proxy         | 0x73ac55b8151C4aD660e87497eC076B898442Ea66                     |
+| GoatVRF Proxy         | 0xC1237429ddF8bE9a1568721007FD843d3B63166C                     |
 
 - **Mainnet**: `TBD`
 
