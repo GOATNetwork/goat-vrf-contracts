@@ -60,7 +60,7 @@ contract MyRandomContract is IRandomnessCallback {
         // otherwise we will reject the request.
         uint256 deadline = block.timestamp + beacon.period();
         // Request randomness with the max gas price you accept and the callback gas to your receiveRandomness method.
-        return IGoatVRF(goatVRF).getRandom(deadline, maxGasPrice, callbackGas);
+        return IGoatVRF(goatVRF).getNewRandom(deadline, maxGasPrice, callbackGas);
     }
     
     /**
@@ -96,7 +96,7 @@ interface IGoatVRF {
    view
    returns (uint256 totalFee);
 
-   function getRandom(uint256 deadline, uint256 maxAllowedGasPrice, uint256 callbackGas)
+   function getNewRandom(uint256 deadline, uint256 maxAllowedGasPrice, uint256 callbackGas)
    external
    returns (uint256 requestId);
 
