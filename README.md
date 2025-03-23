@@ -41,10 +41,12 @@ contract MyRandomContract is IRandomnessCallback {
    function getNewRandom(uint256 maxAllowedGasPrice) external onlyOwner returns (uint256 requestId) {
       // Get the WGOATBTC token address from GoatVRF
       address tokenAddress = IGoatVRF(goatVRF).feeToken();
+      // Gas limit for the callback function, this should be set to a reasonable value
+      uint256 callbackGas = 600000;
 
       // Calculate fee with sufficient gas for callback
       // The callback is simple, but we allocate extra gas to be safe
-      uint256 fee = IGoatVRF(goatVRF).calculateFee(600000);
+      uint256 fee = IGoatVRF(goatVRF).calculateFeeWithGasPrice(callbackGas, maxAllowedGasPrice);
 
       // Transfer tokens from caller to this contract if needed
       // This step is optional depending on your token handling strategy
@@ -65,7 +67,7 @@ contract MyRandomContract is IRandomnessCallback {
 
       // Request randomness with appropriate deadline
       uint256 deadline = block.timestamp + beacon.period();
-      requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, 600000);
+      requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, callbackGas);
    }
     
     /**
@@ -196,9 +198,9 @@ GOAT VRF supports two types of fee rules:
 |-----------------------|---------------------------------------------------------------|
 | Fee Token             | 0xbC10000000000000000000000000000000000000                     |
 | Beacon Type           | BN254                                                         |
-| Beacon                | 0x5c99357924dD8464d66De61c5DA44026523b75DF                     |
+| Beacon                | 0x46d74aB88fd5894F82d150ec18912aCC9df80663                     |
 | Fee Rule Type         | APRO_BTC                                                      |
-| Fee Rule              | 0xA7A084907564A82c3f6bC52BD5114c17634e5Bf8                     |
+| Fee Rule              | 0x647063E7eb8ee8163aDF45B18e149A093e3C8e37                     |
 | Target Value          | 10000000                                                      |
 | Price Feed            | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef                     |
 | Fee Recipient         | 0xF51d148D4A7ae851c1d5641763081023938c6342                     |
@@ -206,7 +208,7 @@ GOAT VRF supports two types of fee rules:
 | Overhead Gas          | 200000                                                        |
 | Max Deadline Delta    | 604800                                                        |
 | Request Expire Time   | 604800                                                        |
-| GoatVRF Proxy         | 0x382088C7410cc959484cB653aCA992bE0eD19ca4                     |
+| GoatVRF Proxy         | 0xa3aeBE2F0d9daDac9E8111D9D41671A510FFB2ca                     |
 
 - **Mainnet**: `TBD`
 

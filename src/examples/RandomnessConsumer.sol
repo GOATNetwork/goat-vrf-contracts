@@ -52,9 +52,12 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
         // Get the WGOATBTC token address from GoatVRF
         address tokenAddress = IGoatVRF(goatVRF).feeToken();
 
+        // Gas limit for the callback function, this should be set to a reasonable value
+        uint256 callbackGas = 600000;
+
         // Calculate fee with sufficient gas for callback
         // The callback is simple, but we allocate extra gas to be safe
-        uint256 fee = IGoatVRF(goatVRF).calculateFee(600000);
+        uint256 fee = IGoatVRF(goatVRF).calculateFeeWithGasPrice(callbackGas, maxAllowedGasPrice);
 
         // Transfer tokens from caller to this contract if needed
         // This step is optional depending on your token handling strategy
@@ -75,7 +78,7 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
 
         // Request randomness with appropriate deadline
         uint256 deadline = block.timestamp + beacon.period();
-        requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, 600000);
+        requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, callbackGas);
     }
 
     /**

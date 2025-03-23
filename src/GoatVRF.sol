@@ -441,7 +441,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         uint256 round = (delta / period) + ((delta % period > 0) ? 1 : 0);
 
         // Calculate the fixed fee for the request (for pre-check only)
-        uint256 intrinsicFee = IFeeRule(_config.feeRule).calculateFee(msg.sender, 0);
+        uint256 intrinsicFee = calculateFeeWithGasPrice(msg.sender, callbackGas, maxAllowedGasPrice);
 
         // Check user's allowance and balance for that fixed fee
         IERC20 token = IERC20(FEE_TOKEN);

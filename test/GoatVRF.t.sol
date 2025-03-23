@@ -18,6 +18,7 @@ import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {UnsafeUpgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
+import {FixedFeeRule} from "../src/FixedFeeRule.sol";
 
 /**
  * @title MockWGOATBTC
@@ -418,7 +419,7 @@ contract GoatVRFTest is Test {
         uint256 callbackGas = 600000;
 
         // Approve tokens for fee
-        uint256 fee = goatVRF.calculateFee(0);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(callbackGas, maxAllowedGasPrice);
         token.approve(address(goatVRF), fee);
 
         // Request randomness
@@ -433,7 +434,7 @@ contract GoatVRFTest is Test {
         uint256 maxAllowedGasPrice = 100 gwei;
 
         // Approve tokens for fee
-        uint256 fee = goatVRF.calculateFee(0);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(6000000000000, 100 gwei);
         token.approve(address(goatVRF), fee);
 
         // Too much gas
@@ -489,7 +490,7 @@ contract GoatVRFTest is Test {
         uint256 round = (delta / period) + ((delta % period > 0) ? 1 : 0);
 
         // Transfer tokens to consumer
-        uint256 fee = goatVRF.calculateFee(600000);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(600000, 100 gwei);
         token.transfer(address(consumer), fee * 2); // Transfer with safety margin
 
         // Approve tokens for fee as the consumer
@@ -656,7 +657,7 @@ contract GoatVRFTest is Test {
         uint256 deadline = block.timestamp + period;
 
         // Approve tokens for fee
-        uint256 fee = goatVRF.calculateFee(0);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(600000, 100 gwei);
         token.approve(address(goatVRF), fee);
 
         // Request randomness
@@ -677,7 +678,7 @@ contract GoatVRFTest is Test {
         uint256 deadline = block.timestamp + period;
 
         // Approve tokens for fee
-        uint256 fee = goatVRF.calculateFee(0);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(600000, 100 gwei);
         token.approve(address(goatVRF), fee);
 
         // Request randomness
@@ -699,7 +700,7 @@ contract GoatVRFTest is Test {
         uint256 deadline = block.timestamp + period;
 
         // Approve tokens for fee
-        uint256 fee = goatVRF.calculateFee(0);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(600000, 100 gwei);
         token.approve(address(goatVRF), fee);
 
         // Request randomness
@@ -720,7 +721,7 @@ contract GoatVRFTest is Test {
         uint256 deadline = block.timestamp + period;
 
         // Approve tokens for fee
-        uint256 fee = goatVRF.calculateFee(0);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(600000, 100 gwei);
         token.approve(address(goatVRF), fee);
 
         // Request randomness
@@ -740,12 +741,14 @@ contract GoatVRFTest is Test {
 
         address poorUser = address(1234);
 
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(callbackGas, maxAllowedGasPrice);
+
         // Make sure poorUser has no tokens
         vm.startPrank(poorUser);
         token.approve(address(goatVRF), type(uint256).max);
 
         // In the modified implementation, this request should revert
-        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InsufficientBalance.selector, 0, FIXED_FEE));
+        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InsufficientBalance.selector, 0, fee));
         goatVRF.getNewRandom(deadline, maxAllowedGasPrice, callbackGas);
         vm.stopPrank();
     }
@@ -949,7 +952,7 @@ contract GoatVRFTest is Test {
         uint256 callbackGas = 600000;
 
         // Approve tokens for fee
-        uint256 fee = goatVRF.calculateFee(0);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(callbackGas, maxAllowedGasPrice);
         token.approve(address(goatVRF), fee);
 
         // Request randomness
@@ -1196,7 +1199,7 @@ contract GoatVRFTest is Test {
         uint256 round = (delta / period) + ((delta % period > 0) ? 1 : 0);
 
         // Transfer tokens to consumer
-        uint256 fee = goatVRF.calculateFee(600000);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(600000, 100 gwei);
         token.transfer(address(consumer), fee * 2); // Transfer with safety margin
 
         // Approve tokens for fee as the consumer
@@ -1249,7 +1252,7 @@ contract GoatVRFTest is Test {
         uint256 round = (delta / period) + ((delta % period > 0) ? 1 : 0);
 
         // Transfer tokens to consumer
-        uint256 fee = goatVRF.calculateFee(600000);
+        uint256 fee = goatVRF.calculateFeeWithGasPrice(600000, 100 gwei);
         token.transfer(address(consumer), fee * 2); // Transfer with safety margin
 
         // Approve tokens for fee as the consumer
