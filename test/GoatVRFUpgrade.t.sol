@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {GoatVRF} from "../src/GoatVRF.sol";
@@ -8,7 +8,7 @@ import {IGoatVRF} from "../src/interfaces/IGoatVRF.sol";
 import {IFeeRule} from "../src/interfaces/IFeeRule.sol";
 import {IDrandBeacon} from "../src/interfaces/IDrandBeacon.sol";
 import {MockDrandBeacon, MockFeeRule, MockWGOATBTC, MockCallback} from "./GoatVRF.t.sol";
-import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import {UnsafeUpgrades, Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
 
 /**
@@ -48,26 +48,14 @@ contract GoatVRFUpgradeTest is Test {
         token = new MockWGOATBTC();
         feeRule = new MockFeeRule(FIXED_FEE);
 
-        // Create Options struct and specify allowed validations to skip
-        Options memory opts;
-        opts.unsafeAllow = "state-variable-immutable,constructor";
-
         // Deploy UUPS proxy using OpenZeppelin Upgrades library
-        proxyAddress = Upgrades.deployUUPSProxy(
-            "GoatVRF.sol:GoatVRF",
+        GoatVRF goatVRF =
+            new GoatVRF(address(token), MAX_DEADLINE_DELTA, OVERHEAD_GAS, REQUEST_EXPIRE_TIME, MAX_CALLBACK_GAS);
+        proxyAddress = UnsafeUpgrades.deployUUPSProxy(
+            address(goatVRF),
             abi.encodeWithSelector(
-                GoatVRF.initialize.selector,
-                address(mockBeacon),
-                address(token),
-                feeRecipient,
-                relayer,
-                address(feeRule),
-                MAX_DEADLINE_DELTA,
-                OVERHEAD_GAS,
-                REQUEST_EXPIRE_TIME,
-                MAX_CALLBACK_GAS
-            ),
-            opts
+                GoatVRF.initialize.selector, address(mockBeacon), feeRecipient, relayer, address(feeRule)
+            )
         );
 
         // Access GoatVRF functionality through proxy
@@ -107,11 +95,12 @@ contract GoatVRFUpgradeTest is Test {
         vm.startPrank(owner);
 
         // Use correct contract path for upgrade with same options
-        Upgrades.upgradeProxy(
-            proxyAddress,
-            "GoatVRFV2UpgradeTest.sol:GoatVRFV2UpgradeTest",
-            abi.encodeWithSelector(GoatVRFV2UpgradeTest.initialize.selector, "2.0.0"),
-            opts
+        GoatVRFV2UpgradeTest newImpl = new GoatVRFV2UpgradeTest(
+            address(token), MAX_DEADLINE_DELTA, OVERHEAD_GAS, REQUEST_EXPIRE_TIME, MAX_CALLBACK_GAS
+        );
+
+        UnsafeUpgrades.upgradeProxy(
+            proxyAddress, address(newImpl), abi.encodeWithSelector(GoatVRFV2UpgradeTest.initialize.selector, "2.0.0")
         );
         vm.stopPrank();
 
@@ -136,7 +125,9 @@ contract GoatVRFUpgradeTest is Test {
         opts.referenceContract = "GoatVRF.sol:GoatVRF";
 
         // Prepare the upgrade - This step deploys the implementation without upgrading
-        address v2Implementation = Upgrades.prepareUpgrade("GoatVRFV2UpgradeTest.sol:GoatVRFV2UpgradeTest", opts);
+        GoatVRFV2UpgradeTest newImpl = new GoatVRFV2UpgradeTest(
+            address(token), MAX_DEADLINE_DELTA, OVERHEAD_GAS, REQUEST_EXPIRE_TIME, MAX_CALLBACK_GAS
+        );
         vm.stopPrank();
 
         // Now try to upgrade with unauthorized account
@@ -150,7 +141,7 @@ contract GoatVRFUpgradeTest is Test {
 
         // Try to directly call upgradeToAndCall on the proxy
         // This is UUPSUpgradeable's method that will fail for non-owners
-        GoatVRF(proxyAddress).upgradeToAndCall(v2Implementation, data);
+        GoatVRF(proxyAddress).upgradeToAndCall(address(newImpl), data);
 
         vm.stopPrank();
     }

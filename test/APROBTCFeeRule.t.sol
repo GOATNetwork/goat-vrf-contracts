@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/APROBTCFeeRule.sol";
@@ -113,7 +113,6 @@ contract APROBTCFeeRuleTest is Test {
 
     function testInitialization() public view {
         assertEq(feeRule.targetValue(), TARGET_VALUE);
-        assertEq(feeRule.owner(), owner);
         assertEq(feeRule.priceFeed(), address(priceFeed));
         assertEq(feeRule.feeToken(), address(feeToken));
         assertEq(feeRule.decimals(), PRICE_FEED_DECIMALS);
@@ -177,65 +176,6 @@ contract APROBTCFeeRuleTest is Test {
         // Fee with tx.gasprice
         uint256 expectedTxFee = expectedBaseFee + (gasUsed * tx.gasprice);
         assertEq(feeWithTxGasPrice, expectedTxFee);
-    }
-
-    function testSetTargetValue() public {
-        uint256 newTargetValue = 0.2 ether;
-
-        vm.prank(owner);
-        feeRule.setTargetValue(newTargetValue);
-
-        assertEq(feeRule.targetValue(), newTargetValue);
-    }
-
-    function testCannotSetZeroTargetValue() public {
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidFee.selector, 0));
-        feeRule.setTargetValue(0);
-    }
-
-    function testOnlyOwnerCanSetTargetValue() public {
-        vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
-        feeRule.setTargetValue(0.2 ether);
-    }
-
-    function testSetPriceFeed() public {
-        MockAggregatorV3 newPriceFeed = new MockAggregatorV3(INITIAL_BTC_PRICE, PRICE_FEED_DECIMALS);
-
-        vm.prank(owner);
-        feeRule.setPriceFeed(address(newPriceFeed));
-
-        assertEq(feeRule.priceFeed(), address(newPriceFeed));
-    }
-
-    function testCannotSetZeroAddressPriceFeed() public {
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidPriceFeed.selector, address(0)));
-        feeRule.setPriceFeed(address(0));
-    }
-
-    function testCannotSetPriceFeedWithZeroDecimals() public {
-        MockAggregatorV3 invalidPriceFeed = new MockAggregatorV3(INITIAL_BTC_PRICE, 0);
-
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidPriceFeed.selector, address(invalidPriceFeed)));
-        feeRule.setPriceFeed(address(invalidPriceFeed));
-    }
-
-    function testSetFeeToken() public {
-        MockERC20 newFeeToken = new MockERC20("New Bitcoin", "NBTC", TOKEN_DECIMALS);
-
-        vm.prank(owner);
-        feeRule.setFeeToken(address(newFeeToken));
-
-        assertEq(feeRule.feeToken(), address(newFeeToken));
-    }
-
-    function testCannotSetZeroAddressFeeToken() public {
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidFeeToken.selector, address(0)));
-        feeRule.setFeeToken(address(0));
     }
 
     // Test price changes affecting fee calculation

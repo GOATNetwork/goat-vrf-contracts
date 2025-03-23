@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {CommonBase} from "../lib/forge-std/src/Base.sol";
 import {StdAssertions} from "../lib/forge-std/src/StdAssertions.sol";
@@ -16,7 +16,7 @@ import {MockDrandBeacon, MockFeeRule} from "./GoatVRF.t.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import {UnsafeUpgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
 
 /**
@@ -381,25 +381,13 @@ contract GoatVRFTest is Test {
         token = new MockWGOATBTC();
         feeRule = new MockFeeRule(FIXED_FEE);
 
-        // Deploy GoatVRF
-        Options memory opts;
-        opts.unsafeAllow = "state-variable-immutable,constructor";
+        goatVRF = new GoatVRF(address(token), MAX_DEADLINE_DELTA, OVERHEAD_GAS, REQUEST_EXPIRE_TIME, MAX_CALLBACK_GAS);
         goatVRF = GoatVRF(
-            Upgrades.deployUUPSProxy(
-                "GoatVRF.sol:GoatVRF",
+            UnsafeUpgrades.deployUUPSProxy(
+                address(goatVRF),
                 abi.encodeWithSelector(
-                    GoatVRF.initialize.selector,
-                    address(mockBeacon),
-                    address(token),
-                    feeRecipient,
-                    relayer,
-                    address(feeRule),
-                    MAX_DEADLINE_DELTA,
-                    OVERHEAD_GAS,
-                    REQUEST_EXPIRE_TIME,
-                    MAX_CALLBACK_GAS
-                ),
-                opts
+                    GoatVRF.initialize.selector, address(mockBeacon), feeRecipient, relayer, address(feeRule)
+                )
             )
         );
 
@@ -535,6 +523,8 @@ contract GoatVRFTest is Test {
             100 gwei,
             600000,
             round,
+            address(mockBeacon),
+            address(feeRule),
             signature
         );
 
@@ -566,7 +556,16 @@ contract GoatVRFTest is Test {
         vm.warp(deadline + 1);
         vm.startPrank(relayer);
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.RequestNotPending.selector, invalidRequestId));
-        goatVRF.fulfillRequest(invalidRequestId, user, maxAllowedGasPrice, callbackGas, round, hex"1234");
+        goatVRF.fulfillRequest(
+            invalidRequestId,
+            user,
+            maxAllowedGasPrice,
+            callbackGas,
+            round,
+            address(mockBeacon),
+            address(feeRule),
+            hex"1234"
+        );
         vm.stopPrank();
     }
 
@@ -592,7 +591,16 @@ contract GoatVRFTest is Test {
         vm.startPrank(relayer);
         vm.txGasPrice(wrongGasPrice);
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidGasPrice.selector, wrongGasPrice));
-        goatVRF.fulfillRequest(requestId, user, maxAllowedGasPrice, callbackGas, round, new bytes(96));
+        goatVRF.fulfillRequest(
+            requestId,
+            user,
+            maxAllowedGasPrice,
+            callbackGas,
+            round,
+            address(mockBeacon),
+            address(feeRule),
+            new bytes(96)
+        );
         vm.stopPrank();
     }
 
@@ -611,12 +619,32 @@ contract GoatVRFTest is Test {
         vm.warp(deadline + 1);
 
         address wrongUser = address(5);
-        bytes32 wrongHash =
-            keccak256(abi.encode(555, address(goatVRF), requestId, wrongUser, maxAllowedGasPrice, callbackGas, 0));
+        bytes32 wrongHash = keccak256(
+            abi.encode(
+                555,
+                address(goatVRF),
+                requestId,
+                wrongUser,
+                maxAllowedGasPrice,
+                callbackGas,
+                0,
+                address(mockBeacon),
+                address(feeRule)
+            )
+        );
 
         vm.startPrank(relayer);
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidRequestHash.selector, wrongHash));
-        goatVRF.fulfillRequest(requestId, wrongUser, maxAllowedGasPrice, callbackGas, 0, new bytes(96));
+        goatVRF.fulfillRequest(
+            requestId,
+            wrongUser,
+            maxAllowedGasPrice,
+            callbackGas,
+            0,
+            address(mockBeacon),
+            address(feeRule),
+            new bytes(96)
+        );
         vm.stopPrank();
     }
 
@@ -725,13 +753,9 @@ contract GoatVRFTest is Test {
     function testConfigSetters() public {
         // Prepare new config values
         address newBeacon = address(0x1234);
-        address newToken = address(0x2345);
         address newFeeRecipient = address(0x3456);
         address newRelayer = address(0x4567);
         address newFeeRule = address(0x5678);
-        uint256 newMaxDeadlineDelta = 10 days;
-        uint256 newOverheadGas = 100000;
-        uint256 newRequestExpireTime = 14 days;
 
         vm.startPrank(owner);
 
@@ -740,12 +764,6 @@ contract GoatVRFTest is Test {
         emit ConfigUpdated("beacon", abi.encode(newBeacon));
         goatVRF.setBeacon(newBeacon);
         assertEq(goatVRF.beacon(), newBeacon);
-
-        // Test setFeeToken
-        vm.expectEmit(true, true, true, true);
-        emit ConfigUpdated("token", abi.encode(newToken));
-        goatVRF.setFeeToken(newToken);
-        assertEq(goatVRF.feeToken(), newToken);
 
         // Test setFeeRecipient
         vm.expectEmit(true, true, true, true);
@@ -765,24 +783,6 @@ contract GoatVRFTest is Test {
         goatVRF.setFeeRule(newFeeRule);
         assertEq(goatVRF.feeRule(), newFeeRule);
 
-        // Test setMaxDeadlineDelta
-        vm.expectEmit(true, true, true, true);
-        emit ConfigUpdated("maxDeadlineDelta", abi.encode(newMaxDeadlineDelta));
-        goatVRF.setMaxDeadlineDelta(newMaxDeadlineDelta);
-        assertEq(goatVRF.maxDeadlineDelta(), newMaxDeadlineDelta);
-
-        // Test setOverheadGas
-        vm.expectEmit(true, true, true, true);
-        emit ConfigUpdated("overheadGas", abi.encode(newOverheadGas));
-        goatVRF.setOverheadGas(newOverheadGas);
-        assertEq(goatVRF.overheadGas(), newOverheadGas);
-
-        // Test setRequestExpireTime
-        vm.expectEmit(true, true, true, true);
-        emit ConfigUpdated("requestExpireTime", abi.encode(newRequestExpireTime));
-        goatVRF.setRequestExpireTime(newRequestExpireTime);
-        assertEq(goatVRF.requestExpireTime(), newRequestExpireTime);
-
         vm.stopPrank();
     }
 
@@ -793,10 +793,6 @@ contract GoatVRFTest is Test {
         // Test invalid beacon
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidBeacon.selector, address(0)));
         goatVRF.setBeacon(address(0));
-
-        // Test invalid token
-        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidToken.selector, address(0)));
-        goatVRF.setFeeToken(address(0));
 
         // Test invalid fee recipient
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidFeeRecipient.selector, address(0)));
@@ -809,10 +805,6 @@ contract GoatVRFTest is Test {
         // Test invalid fee rule
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidFeeRule.selector, address(0)));
         goatVRF.setFeeRule(address(0));
-
-        // Test invalid request expire time (0)
-        vm.expectRevert(abi.encodeWithSelector(IGoatVRF.InvalidRequestExpireTime.selector, 0));
-        goatVRF.setRequestExpireTime(0);
 
         vm.stopPrank();
     }
@@ -828,9 +820,6 @@ contract GoatVRFTest is Test {
         goatVRF.setBeacon(address(0x1111));
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
-        goatVRF.setFeeToken(address(0x1111));
-
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
         goatVRF.setFeeRecipient(address(0x1111));
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
@@ -838,15 +827,6 @@ contract GoatVRFTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
         goatVRF.setFeeRule(address(0x1111));
-
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
-        goatVRF.setMaxDeadlineDelta(1);
-
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
-        goatVRF.setOverheadGas(1);
-
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, unauthorized));
-        goatVRF.setRequestExpireTime(1 days);
 
         vm.stopPrank();
     }
@@ -875,7 +855,16 @@ contract GoatVRFTest is Test {
         // Fulfillment should revert due to insufficient allowance
         vm.startPrank(relayer);
         vm.expectRevert("ERC20: transfer amount exceeds allowance");
-        goatVRF.fulfillRequest(requestId, user, maxAllowedGasPrice, callbackGas, round, new bytes(96));
+        goatVRF.fulfillRequest(
+            requestId,
+            user,
+            maxAllowedGasPrice,
+            callbackGas,
+            round,
+            address(mockBeacon),
+            address(feeRule),
+            new bytes(96)
+        );
         vm.stopPrank();
     }
 
@@ -903,7 +892,16 @@ contract GoatVRFTest is Test {
         // Fulfillment should revert due to insufficient balance
         vm.startPrank(relayer);
         vm.expectRevert("Transfer amount exceeds balance");
-        goatVRF.fulfillRequest(requestId, user, maxAllowedGasPrice, callbackGas, round, new bytes(96));
+        goatVRF.fulfillRequest(
+            requestId,
+            user,
+            maxAllowedGasPrice,
+            callbackGas,
+            round,
+            address(mockBeacon),
+            address(feeRule),
+            new bytes(96)
+        );
         vm.stopPrank();
     }
 
@@ -920,7 +918,7 @@ contract GoatVRFTest is Test {
         vm.stopPrank();
 
         // Warp to after deadline and expiration
-        vm.warp(block.timestamp + REQUEST_EXPIRE_TIME + 1);
+        vm.warp(block.timestamp + REQUEST_EXPIRE_TIME + 1 hours + 1);
 
         // Calculate round
         uint256 genesis = mockBeacon.genesisTimestamp();
@@ -931,7 +929,16 @@ contract GoatVRFTest is Test {
         // Attempt to fulfill expired request
         vm.startPrank(relayer);
         vm.expectRevert(abi.encodeWithSelector(IGoatVRF.RequestExpired.selector, REQUEST_EXPIRE_TIME));
-        goatVRF.fulfillRequest(requestId, user, maxAllowedGasPrice, callbackGas, round, new bytes(96));
+        goatVRF.fulfillRequest(
+            requestId,
+            user,
+            maxAllowedGasPrice,
+            callbackGas,
+            round,
+            address(mockBeacon),
+            address(feeRule),
+            new bytes(96)
+        );
         vm.stopPrank();
     }
 
@@ -949,7 +956,7 @@ contract GoatVRFTest is Test {
         uint256 requestId = goatVRF.getNewRandom(deadline, maxAllowedGasPrice, callbackGas);
 
         // Verify request timestamp
-        assertEq(goatVRF.getRequestTimestamp(requestId), block.timestamp);
+        assertEq(goatVRF.getRequestTimestamp(requestId), deadline);
     }
 
     // Test calculateFeeWithGasPrice method
@@ -1106,7 +1113,9 @@ contract GoatVRFTest is Test {
         uint256 preFulfillBalance = token.balanceOf(user);
         uint256 initialGas = gasleft();
 
-        goatVRF.fulfillRequest(requestId, user, maxAllowedGasPrice, callbackGas, round, signature);
+        goatVRF.fulfillRequest(
+            requestId, user, maxAllowedGasPrice, callbackGas, round, address(mockBeacon), address(feeRule), signature
+        );
 
         uint256 gasUsed = initialGas - gasleft();
         console2.log("Actual gas used: %d", gasUsed);
@@ -1169,7 +1178,7 @@ contract GoatVRFTest is Test {
         assertEq(uint256(state), uint256(IGoatVRF.RequestState.Pending));
 
         // Verify request timestamp
-        assertEq(goatVRF.getRequestTimestamp(requestId), block.timestamp);
+        assertEq(goatVRF.getRequestTimestamp(requestId), deadline);
     }
 
     // Test fulfilling randomness with failing callback
@@ -1212,7 +1221,9 @@ contract GoatVRFTest is Test {
 
         // Fulfill randomness - this should handle the callback failure properly
         vm.prank(relayer);
-        goatVRF.fulfillRequest(requestId, address(consumer), 100 gwei, 600000, round, signature);
+        goatVRF.fulfillRequest(
+            requestId, address(consumer), 100 gwei, 600000, round, address(mockBeacon), address(feeRule), signature
+        );
 
         // Verify request state changed to Failed (not Fulfilled)
         assertEq(
@@ -1263,7 +1274,9 @@ contract GoatVRFTest is Test {
 
         // Fulfill randomness - this should complete successfully
         vm.prank(relayer);
-        goatVRF.fulfillRequest(requestId, address(consumer), 100 gwei, 600000, round, signature);
+        goatVRF.fulfillRequest(
+            requestId, address(consumer), 100 gwei, 600000, round, address(mockBeacon), address(feeRule), signature
+        );
 
         // Verify request state changed to Fulfilled
         assertEq(

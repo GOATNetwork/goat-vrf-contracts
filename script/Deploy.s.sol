@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "forge-std/Script.sol";
 import "../src/GoatVRF.sol";
@@ -10,7 +10,7 @@ import "../src/BLS12381DrandBeacon.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
-import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import {Upgrades, UnsafeUpgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
 
 /**
@@ -93,25 +93,24 @@ contract Deploy is Script {
 
         // Deploy proxy
         console.log("Deploying proxy...");
-        // Create Options struct with the same settings as in the test
-        Options memory opts;
-        opts.unsafeAllow = "state-variable-immutable,constructor";
+        GoatVRF goatVRF = new GoatVRF(
+            feeToken, // feeToken
+            maxDeadlineDelta, // maxDeadlineDelta
+            overheadGas, // overheadGas
+            requestExpireTime, // requestExpireTime
+            maxCallbackGas // maxCallbackGas
+        );
+        console.log("GoatVRF implementation deployed at:", address(goatVRF));
 
-        address proxy = Upgrades.deployUUPSProxy(
-            "GoatVRF.sol:GoatVRF",
+        address proxy = UnsafeUpgrades.deployUUPSProxy(
+            address(goatVRF),
             abi.encodeWithSelector(
                 GoatVRF.initialize.selector,
                 beacon, // beacon
-                feeToken, // feeToken
                 feeRecipient, // feeRecipient
                 relayer, // relayer
-                feeRule, // feeRule
-                maxDeadlineDelta, // maxDeadlineDelta
-                overheadGas, // overheadGas
-                requestExpireTime, // requestExpireTime
-                maxCallbackGas // maxCallbackGas
-            ),
-            opts
+                feeRule // feeRule
+            )
         );
         console.log("Proxy deployed at:", address(proxy));
 
@@ -200,7 +199,7 @@ contract Deploy is Script {
 
         // Check if the proxy is correctly set up
         // Read implementation address directly from storage slot
-        address implAddr = StorageSlot.getAddressSlot(IMPLEMENTATION_SLOT).value;
+        address implAddr = Upgrades.getImplementationAddress(proxy);
         console.log("Implementation address from proxy:", implAddr);
 
         console.log("Deployment Summary:");

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 /**
  * @title IGoatVRF
@@ -38,6 +38,8 @@ interface IGoatVRF {
      * @dev Emitted when randomness is requested
      * @param requestId Unique identifier for the request
      * @param requester Address that made the request
+     * @param beacon Address of the beacon used for randomness
+     * @param feeRule Address of the fee rule contract
      * @param maxAllowedGasPrice Maximum allowed gas price for fulfillment
      * @param callbackGas Amount of gas allocated for the callback
      * @param round Round number for the request
@@ -45,6 +47,8 @@ interface IGoatVRF {
     event NewRequest(
         uint256 indexed requestId,
         address indexed requester,
+        address beacon,
+        address feeRule,
         uint256 maxAllowedGasPrice,
         uint256 callbackGas,
         uint256 round

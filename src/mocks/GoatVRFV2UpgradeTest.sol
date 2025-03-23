@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "../GoatVRF.sol";
 
@@ -12,8 +12,24 @@ contract GoatVRFV2UpgradeTest is GoatVRF {
     // New variable to test state after upgrade
     string public version;
 
+    /**
+     * @dev Constructor func
+     * @param feeToken_ Address of the ERC20 token to pay the fee
+     * @param maxDeadlineDelta_ Maximum deadline delta in seconds
+     * @param overheadGas_ Overhead gas amount
+     * @param requestExpireTime_ Request expiration time in seconds
+     * @param maxCallbackGas_ Maximum callback gas allowed
+     */
+    constructor(
+        address feeToken_,
+        uint256 maxDeadlineDelta_,
+        uint256 overheadGas_,
+        uint256 requestExpireTime_,
+        uint256 maxCallbackGas_
+    ) GoatVRF(feeToken_, maxDeadlineDelta_, overheadGas_, requestExpireTime_, maxCallbackGas_) {}
+
     // Initialize function for V2 with reinitializer to avoid multiple initialization
-    function initialize(string memory _version) public reinitializer(2) {
+    function initialize(string memory _version) external reinitializer(2) {
         // Call parent initializers to satisfy upgrade requirements
         __Ownable_init(msg.sender);
         __ReentrancyGuard_init();

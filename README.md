@@ -18,7 +18,7 @@ To integrate GOAT VRF into your smart contract, implement the `IRandomnessCallba
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -196,9 +196,9 @@ GOAT VRF supports two types of fee rules:
 |-----------------------|---------------------------------------------------------------|
 | Fee Token             | 0xbC10000000000000000000000000000000000000                     |
 | Beacon Type           | BN254                                                         |
-| Beacon                | 0x9a9d4bEB5331C8Cb493ab2D9906601cDC0e3C804                     |
+| Beacon                | 0x5c99357924dD8464d66De61c5DA44026523b75DF                     |
 | Fee Rule Type         | APRO_BTC                                                      |
-| Fee Rule              | 0x9D5824306D1F35Bf45C8Cae2591D24b6ca8B5e80                     |
+| Fee Rule              | 0xA7A084907564A82c3f6bC52BD5114c17634e5Bf8                     |
 | Target Value          | 10000000                                                      |
 | Price Feed            | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef                     |
 | Fee Recipient         | 0xF51d148D4A7ae851c1d5641763081023938c6342                     |
@@ -206,7 +206,7 @@ GOAT VRF supports two types of fee rules:
 | Overhead Gas          | 200000                                                        |
 | Max Deadline Delta    | 604800                                                        |
 | Request Expire Time   | 604800                                                        |
-| GoatVRF Proxy         | 0xeccdB88d82eeC273cA6c305046cB6ac14D7B007c                     |
+| GoatVRF Proxy         | 0x382088C7410cc959484cB653aCA992bE0eD19ca4                     |
 
 - **Mainnet**: `TBD`
 
