@@ -16,6 +16,8 @@ import {MockDrandBeacon, MockFeeRule} from "./GoatVRF.t.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
 
 /**
  * @title MockWGOATBTC
@@ -380,17 +382,25 @@ contract GoatVRFTest is Test {
         feeRule = new MockFeeRule(FIXED_FEE);
 
         // Deploy GoatVRF
-        goatVRF = new GoatVRF();
-        goatVRF.initialize(
-            address(mockBeacon),
-            address(token),
-            feeRecipient,
-            relayer,
-            address(feeRule),
-            MAX_DEADLINE_DELTA,
-            OVERHEAD_GAS,
-            REQUEST_EXPIRE_TIME,
-            MAX_CALLBACK_GAS
+        Options memory opts;
+        opts.unsafeAllow = "state-variable-immutable,constructor";
+        goatVRF = GoatVRF(
+            Upgrades.deployUUPSProxy(
+                "GoatVRF.sol:GoatVRF",
+                abi.encodeWithSelector(
+                    GoatVRF.initialize.selector,
+                    address(mockBeacon),
+                    address(token),
+                    feeRecipient,
+                    relayer,
+                    address(feeRule),
+                    MAX_DEADLINE_DELTA,
+                    OVERHEAD_GAS,
+                    REQUEST_EXPIRE_TIME,
+                    MAX_CALLBACK_GAS
+                ),
+                opts
+            )
         );
 
         vm.stopPrank();

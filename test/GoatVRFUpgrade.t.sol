@@ -50,7 +50,7 @@ contract GoatVRFUpgradeTest is Test {
 
         // Create Options struct and specify allowed validations to skip
         Options memory opts;
-        opts.unsafeAllow = "state-variable-immutable";
+        opts.unsafeAllow = "state-variable-immutable,constructor";
 
         // Deploy UUPS proxy using OpenZeppelin Upgrades library
         proxyAddress = Upgrades.deployUUPSProxy(
@@ -82,7 +82,7 @@ contract GoatVRFUpgradeTest is Test {
 
         // Create Options struct and specify allowed validations to skip
         Options memory opts;
-        opts.unsafeAllow = "state-variable-immutable";
+        opts.unsafeAllow = "state-variable-immutable,constructor";
         opts.referenceContract = "GoatVRF.sol:GoatVRF";
 
         // Create a request
@@ -132,7 +132,7 @@ contract GoatVRFUpgradeTest is Test {
         // First deploy the implementation contract with owner account
         vm.startPrank(owner);
         Options memory opts;
-        opts.unsafeAllow = "state-variable-immutable";
+        opts.unsafeAllow = "state-variable-immutable,constructor";
         opts.referenceContract = "GoatVRF.sol:GoatVRF";
 
         // Prepare the upgrade - This step deploys the implementation without upgrading

@@ -94,6 +94,7 @@ contract APROBTCFeeRuleTest is Test {
     int256 public constant INITIAL_BTC_PRICE = 87818 * 10 ** 8; // $87,818 with 8 decimals
     uint8 public constant PRICE_FEED_DECIMALS = 8;
     uint8 public constant TOKEN_DECIMALS = 18;
+    uint256 public constant STALE_PERIOD = 1 days;
 
     function setUp() public {
         vm.startPrank(owner);
@@ -105,7 +106,7 @@ contract APROBTCFeeRuleTest is Test {
         priceFeed = new MockAggregatorV3(INITIAL_BTC_PRICE, PRICE_FEED_DECIMALS);
 
         // Create fee rule
-        feeRule = new APROBTCFeeRule(TARGET_VALUE, address(feeToken), address(priceFeed));
+        feeRule = new APROBTCFeeRule(TARGET_VALUE, address(feeToken), address(priceFeed), STALE_PERIOD);
 
         vm.stopPrank();
     }
@@ -300,7 +301,8 @@ contract APROBTCFeeRuleTest is Test {
         uint256 maxTargetValue = type(uint256).max / (10 ** TOKEN_DECIMALS); // Avoid overflow in calculation
 
         vm.startPrank(owner);
-        APROBTCFeeRule newFeeRule = new APROBTCFeeRule(maxTargetValue, address(feeToken), address(priceFeed));
+        APROBTCFeeRule newFeeRule =
+            new APROBTCFeeRule(maxTargetValue, address(feeToken), address(priceFeed), STALE_PERIOD);
         vm.stopPrank();
 
         assertEq(newFeeRule.targetValue(), maxTargetValue);

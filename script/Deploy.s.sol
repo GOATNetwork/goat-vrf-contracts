@@ -82,9 +82,10 @@ contract Deploy is Script {
             // Load APRO BTC FeeRule configuration
             uint256 targetValue = vm.envUint("TARGET_VALUE");
             address priceFeed = vm.envAddress("PRICE_FEED");
+            uint256 stalePeriod = vm.envUint("STALE_PERIOD");
 
             // Deploy APROBTCFeeRule
-            feeRule = address(new APROBTCFeeRule(targetValue, feeToken, priceFeed));
+            feeRule = address(new APROBTCFeeRule(targetValue, feeToken, priceFeed, stalePeriod));
             console.log("APRO BTC Fee Rule deployed at:", feeRule);
         } else {
             revert("Invalid fee rule type");
@@ -94,7 +95,7 @@ contract Deploy is Script {
         console.log("Deploying proxy...");
         // Create Options struct with the same settings as in the test
         Options memory opts;
-        opts.unsafeAllow = "state-variable-immutable";
+        opts.unsafeAllow = "state-variable-immutable,constructor";
 
         address proxy = Upgrades.deployUUPSProxy(
             "GoatVRF.sol:GoatVRF",

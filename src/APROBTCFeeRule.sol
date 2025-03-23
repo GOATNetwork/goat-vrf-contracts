@@ -16,6 +16,7 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
     IAggregatorV3 private _priceFeed;
     uint8 private _priceFeedDecimals;
     ERC20 private _feeToken;
+    uint256 private _stalePeriod;
 
     // Events
     event FeeUpdated(uint256 newTarget);
@@ -30,12 +31,14 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
     error InvalidTotalDecimals(uint8 decimals);
     error IncompleteRound(uint80 roundId);
     error PriceFeedDecimalsMismatch(uint256 newDecimals, uint256 oldDecimals);
+    error InvalidStalePeriod(uint256 stalePeriod);
+    error PriceOracleStale(uint256 updatedAt, uint256 stalePeriod);
 
     /**
      * @dev Constructor
      * @param target_ Initial target fee amount in USD
      */
-    constructor(uint256 target_, address feeToken_, address priceFeed_) Ownable(msg.sender) {
+    constructor(uint256 target_, address feeToken_, address priceFeed_, uint256 stalePeriod_) Ownable(msg.sender) {
         if (target_ == 0) {
             revert InvalidFee(target_);
         }
@@ -45,7 +48,11 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
         if (feeToken_ == address(0)) {
             revert InvalidFeeToken(feeToken_);
         }
+        if (stalePeriod_ == 0) {
+            revert InvalidStalePeriod(stalePeriod_);
+        }
 
+        _stalePeriod = stalePeriod_;
         _targetValue = target_;
         _priceFeed = IAggregatorV3(priceFeed_);
         _feeToken = ERC20(feeToken_);
@@ -101,6 +108,10 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
             revert IncompleteRound(roundId);
         }
 
+        if (block.timestamp - updatedAt > _stalePeriod) {
+            revert PriceOracleStale(updatedAt, block.timestamp - updatedAt);
+        }
+
         // avoid overflow in fee calculation
         uint8 totalDecimals = priceFeedDecimals + feeTokenDecimals;
         if (totalDecimals > 77) {
@@ -154,6 +165,14 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
     }
 
     /**
+     * @dev Get the current stale period
+     * @return The stale period in seconds
+     */
+    function stalePeriod() external view returns (uint256) {
+        return _stalePeriod;
+    }
+
+    /**
      * @dev Set the target value
      * @param target_ The new target value
      */
@@ -192,5 +211,16 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
         }
         _feeToken = ERC20(feeToken_);
         emit FeeTokenUpdated(feeToken_);
+    }
+
+    /**
+     * @dev Set the stale period
+     * @param stalePeriod_ The new stale period
+     */
+    function setStalePeriod(uint256 stalePeriod_) external onlyOwner {
+        if (stalePeriod_ == 0) {
+            revert InvalidStalePeriod(stalePeriod_);
+        }
+        _stalePeriod = stalePeriod_;
     }
 }
