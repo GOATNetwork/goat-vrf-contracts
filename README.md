@@ -33,8 +33,8 @@ contract MyRandomContract is IRandomnessCallback {
         goatVRF = goatVRF_;
     }
 
-   /**
-    * @dev Request randomness from GoatVRF
+    /**
+     * @dev Request randomness from GoatVRF
      * @param maxAllowedGasPrice Maximum allowed gas price for fulfillment
      * @return requestId Unique identifier for the request
      */
