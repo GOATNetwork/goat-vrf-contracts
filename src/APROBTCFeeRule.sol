@@ -11,7 +11,7 @@ import {ERC20} from
 /**
  * @title APROBTCFeeRule
  * @dev Implementation of IFeeRule with a dynamic fee with APRO price feed plus gas cost model.
- *  Please note that this fee rule only supports native token wrapper, if you are using a non-native token wrapper,
+ *  Please note that this fee rule only supports native token wrapper, if you are using a non-native token as fee token,
  *  it will lead to unexpected behavior.
  */
 contract APROBTCFeeRule is IFeeRule {
