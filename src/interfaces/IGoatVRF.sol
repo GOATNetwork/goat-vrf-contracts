@@ -16,11 +16,9 @@ interface IGoatVRF {
     error InvalidFeeRecipient(address recipient);
     error InvalidRelayer(address relayer);
     error InvalidFeeRule(address feeRule);
-    error InvalidMaxDeadlineDelta(uint256 maxDeadlineDelta);
     error InvalidRequestExpireTime(uint256 expireTime);
     error OnlyRelayer();
     error RequestNotPending(uint256 requestId);
-    error PaymentProcessingFailed(uint256 requestId, string reason);
     error InsufficientAllowance(uint256 allowance, uint256 required);
     error InsufficientBalance(uint256 balance, uint256 required);
     error InvalidRequestHash(bytes32 requestHash);

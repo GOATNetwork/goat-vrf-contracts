@@ -16,7 +16,7 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
     using SafeERC20 for IERC20;
 
     // GoatVRF contract address
-    address public goatVRF;
+    address public immutable goatVRF;
 
     // Random number storage
     mapping(uint256 => uint256) public randomResults;
@@ -30,16 +30,10 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
      * @param goatVRF_ Address of the GoatVRF contract
      */
     constructor(address goatVRF_) Ownable(msg.sender) {
-        goatVRF = goatVRF_;
-    }
+        if (goatVRF_ == address(0)) {
+            revert("Invalid GoatVRF address");
+        }
 
-    /**
-     * @dev Update the GoatVRF contract address
-     *      Note: This is centralized in the owner. For real decentralized usage,
-     *      consider restricting changes via timelock + multiSig, or removing this function entirely.
-     * @param goatVRF_ New GoatVRF contract address
-     */
-    function setGoatVRF(address goatVRF_) external onlyOwner {
         goatVRF = goatVRF_;
     }
 
@@ -53,7 +47,7 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
         address tokenAddress = IGoatVRF(goatVRF).feeToken();
 
         // Gas limit for the callback function, this should be set to a reasonable value
-        uint256 callbackGas = 600000;
+        uint256 callbackGas = 6e5;
 
         // Calculate fee with sufficient gas for callback
         // The callback is simple, but we allocate extra gas to be safe
@@ -112,7 +106,7 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
      * @param recipient Address to send the tokens to
      */
     function recoverTokens(address token_, uint256 amount, address recipient) external onlyOwner {
-        IERC20(token_).transfer(recipient, amount);
+        IERC20(token_).safeTransfer(recipient, amount);
     }
 
     /**
