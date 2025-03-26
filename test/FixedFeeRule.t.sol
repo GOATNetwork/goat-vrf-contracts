@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/FixedFeeRule.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract FixedFeeRuleTest is Test {
     FixedFeeRule public feeRule;
@@ -20,7 +19,6 @@ contract FixedFeeRuleTest is Test {
 
     function testInitialization() public view {
         assertEq(feeRule.fixedFee(), INITIAL_FIXED_FEE);
-        assertEq(feeRule.owner(), owner);
     }
 
     function testCalculateFeeWithZeroGasUsed() public view {
@@ -76,30 +74,9 @@ contract FixedFeeRuleTest is Test {
         assertEq(feeWithTxGasPrice, expectedTxFee);
     }
 
-    function testSetFixedFee() public {
-        uint256 newFixedFee = 2 ether;
-
-        vm.prank(owner);
-        feeRule.setFixedFee(newFixedFee);
-
-        assertEq(feeRule.fixedFee(), newFixedFee);
-    }
-
-    function testCannotSetZeroFixedFee() public {
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(FixedFeeRule.InvalidFixedFee.selector, 0));
-        feeRule.setFixedFee(0);
-    }
-
     function testCannotConstructWithZeroFixedFee() public {
         vm.expectRevert(abi.encodeWithSelector(FixedFeeRule.InvalidFixedFee.selector, 0));
         new FixedFeeRule(0);
-    }
-
-    function testOnlyOwnerCanSetFixedFee() public {
-        vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
-        feeRule.setFixedFee(2 ether);
     }
 
     function testCalculateFeeWithDifferentGasPrices() public {
@@ -166,22 +143,6 @@ contract FixedFeeRuleTest is Test {
 
         uint256 actualFee = feeRule.calculateFeeWithGasPrice(user, gasUsed, maxGasPrice);
         assertEq(actualFee, expectedTotalFee, "Fee calculation with custom gas price incorrect with max gas price");
-    }
-
-    function testSetMaxFixedFee() public {
-        uint256 maxFixedFee = type(uint256).max;
-
-        vm.prank(owner);
-        feeRule.setFixedFee(maxFixedFee);
-
-        assertEq(feeRule.fixedFee(), maxFixedFee, "Failed to set max fixed fee");
-
-        // Test fee calculation with max fixed fee
-        uint256 gasUsed = 1; // Minimal gas to avoid overflow
-        vm.fee(1); // Minimal gas price to avoid overflow
-
-        uint256 actualFee = feeRule.calculateFee(user, gasUsed);
-        assertEq(actualFee, maxFixedFee + (gasUsed * tx.gasprice), "Fee calculation incorrect with max fixed fee");
     }
 
     function testCalculateFeeWithZeroAddress() public {

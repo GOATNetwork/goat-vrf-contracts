@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IFeeRule.sol";
 
 /**
  * @title FixedFeeRule
  * @dev Implementation of IFeeRule with a fixed fee plus gas cost model
  */
-contract FixedFeeRule is Ownable, IFeeRule {
+contract FixedFeeRule is IFeeRule {
     // Fixed fee amount
-    uint256 private _fixedFee;
-
-    // Events
-    event FixedFeeUpdated(uint256 newFixedFee);
+    uint256 private immutable _fixedFee;
 
     // Error messages
     error InvalidFixedFee(uint256 fixedFee);
@@ -22,14 +18,12 @@ contract FixedFeeRule is Ownable, IFeeRule {
      * @dev Constructor
      * @param fixedFee_ Initial fixed fee amount
      */
-    constructor(uint256 fixedFee_) Ownable(msg.sender) {
+    constructor(uint256 fixedFee_) {
         if (fixedFee_ == 0) {
             revert InvalidFixedFee(fixedFee_);
         }
 
         _fixedFee = fixedFee_;
-
-        emit FixedFeeUpdated(fixedFee_);
     }
 
     /**
@@ -80,17 +74,5 @@ contract FixedFeeRule is Ownable, IFeeRule {
      */
     function fixedFee() external view returns (uint256) {
         return _fixedFee;
-    }
-
-    /**
-     * @dev Set the fixed fee
-     * @param fixedFee_ The new fixed fee
-     */
-    function setFixedFee(uint256 fixedFee_) external onlyOwner {
-        if (fixedFee_ == 0) {
-            revert InvalidFixedFee(fixedFee_);
-        }
-        _fixedFee = fixedFee_;
-        emit FixedFeeUpdated(fixedFee_);
     }
 }

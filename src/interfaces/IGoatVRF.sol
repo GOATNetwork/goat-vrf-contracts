@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 /**
  * @title IGoatVRF
@@ -8,9 +8,6 @@ pragma solidity ^0.8.28;
 interface IGoatVRF {
     // Error definitions
     error InvalidDeadline(uint256 deadline);
-    error DeadlineNotReached(uint256 requestId, uint256 deadline);
-    error DeadlinePassed(uint256 deadline);
-    error InvalidRequestId(uint256 requestId);
     error InvalidUser(address user);
     error InvalidGasPrice(uint256 gasPrice);
     error RequestExpired(uint256 expireTime);
@@ -23,7 +20,6 @@ interface IGoatVRF {
     error InvalidRequestExpireTime(uint256 expireTime);
     error OnlyRelayer();
     error RequestNotPending(uint256 requestId);
-    error CallbackFailed(uint256 requestId, bytes reason);
     error PaymentProcessingFailed(uint256 requestId, string reason);
     error InsufficientAllowance(uint256 allowance, uint256 required);
     error InsufficientBalance(uint256 balance, uint256 required);
@@ -42,6 +38,8 @@ interface IGoatVRF {
      * @dev Emitted when randomness is requested
      * @param requestId Unique identifier for the request
      * @param requester Address that made the request
+     * @param beacon Address of the beacon used for randomness
+     * @param feeRule Address of the fee rule contract
      * @param maxAllowedGasPrice Maximum allowed gas price for fulfillment
      * @param callbackGas Amount of gas allocated for the callback
      * @param round Round number for the request
@@ -49,6 +47,8 @@ interface IGoatVRF {
     event NewRequest(
         uint256 indexed requestId,
         address indexed requester,
+        address beacon,
+        address feeRule,
         uint256 maxAllowedGasPrice,
         uint256 callbackGas,
         uint256 round
@@ -71,6 +71,13 @@ interface IGoatVRF {
     event RequestFulfilled(uint256 indexed requestId, uint256 randomness, bool success, uint256 totalFee);
 
     /**
+     * @dev Emitted when a callback fails
+     * @param requestId Unique identifier for the request
+     * @param callbackContract Address of the contract that failed to fulfill the request
+     */
+    event CallbackFailed(uint256 indexed requestId, address indexed callbackContract);
+
+    /**
      * @dev Enum representing the state of a randomness request
      */
     enum RequestState {
@@ -78,7 +85,8 @@ interface IGoatVRF {
         Pending, // Request is pending fulfillment
         Fulfilled, // Request has been fulfilled
         Failed, // Request fulfillment failed
-        Cancelled // Request was cancelled
+        Cancelled, // Request was cancelled
+        Expired // Request has expired
 
     }
 
@@ -98,12 +106,32 @@ interface IGoatVRF {
     function calculateFee(uint256 gas) external view returns (uint256 totalFee);
 
     /**
+     * @dev Calculate the fee for a randomness request
+     * @param addr Address of the requester
+     * @param gas Amount of gas will be using
+     * @return totalFee Total fee for the request
+     */
+    function calculateFee(address addr, uint256 gas) external view returns (uint256 totalFee);
+
+    /**
      * @dev Calculate the fee for a randomness request with custom gas price
      * @param gas Amount of gas will be using
      * @param gasPrice Custom gas price to use for calculation
      * @return totalFee Total fee for the request
      */
     function calculateFeeWithGasPrice(uint256 gas, uint256 gasPrice) external view returns (uint256 totalFee);
+
+    /**
+     * @dev Calculate the fee for a randomness request with custom gas price
+     * @param addr Address of the requester
+     * @param gas Amount of gas will be using
+     * @param gasPrice Custom gas price to use for calculation
+     * @return totalFee Total fee for the request
+     */
+    function calculateFeeWithGasPrice(address addr, uint256 gas, uint256 gasPrice)
+        external
+        view
+        returns (uint256 totalFee);
 
     /**
      * @dev Request randomness with a future deadline

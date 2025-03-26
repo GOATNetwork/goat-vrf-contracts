@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/APROBTCFeeRule.sol";
@@ -94,6 +94,7 @@ contract APROBTCFeeRuleTest is Test {
     int256 public constant INITIAL_BTC_PRICE = 87818 * 10 ** 8; // $87,818 with 8 decimals
     uint8 public constant PRICE_FEED_DECIMALS = 8;
     uint8 public constant TOKEN_DECIMALS = 18;
+    uint256 public constant STALE_PERIOD = 1 days;
 
     function setUp() public {
         vm.startPrank(owner);
@@ -105,14 +106,13 @@ contract APROBTCFeeRuleTest is Test {
         priceFeed = new MockAggregatorV3(INITIAL_BTC_PRICE, PRICE_FEED_DECIMALS);
 
         // Create fee rule
-        feeRule = new APROBTCFeeRule(TARGET_VALUE, address(feeToken), address(priceFeed));
+        feeRule = new APROBTCFeeRule(TARGET_VALUE, address(feeToken), address(priceFeed), STALE_PERIOD);
 
         vm.stopPrank();
     }
 
     function testInitialization() public view {
         assertEq(feeRule.targetValue(), TARGET_VALUE);
-        assertEq(feeRule.owner(), owner);
         assertEq(feeRule.priceFeed(), address(priceFeed));
         assertEq(feeRule.feeToken(), address(feeToken));
         assertEq(feeRule.decimals(), PRICE_FEED_DECIMALS);
@@ -178,65 +178,6 @@ contract APROBTCFeeRuleTest is Test {
         assertEq(feeWithTxGasPrice, expectedTxFee);
     }
 
-    function testSetTargetValue() public {
-        uint256 newTargetValue = 0.2 ether;
-
-        vm.prank(owner);
-        feeRule.setTargetValue(newTargetValue);
-
-        assertEq(feeRule.targetValue(), newTargetValue);
-    }
-
-    function testCannotSetZeroTargetValue() public {
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidFee.selector, 0));
-        feeRule.setTargetValue(0);
-    }
-
-    function testOnlyOwnerCanSetTargetValue() public {
-        vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
-        feeRule.setTargetValue(0.2 ether);
-    }
-
-    function testSetPriceFeed() public {
-        MockAggregatorV3 newPriceFeed = new MockAggregatorV3(INITIAL_BTC_PRICE, PRICE_FEED_DECIMALS);
-
-        vm.prank(owner);
-        feeRule.setPriceFeed(address(newPriceFeed));
-
-        assertEq(feeRule.priceFeed(), address(newPriceFeed));
-    }
-
-    function testCannotSetZeroAddressPriceFeed() public {
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidPriceFeed.selector, address(0)));
-        feeRule.setPriceFeed(address(0));
-    }
-
-    function testCannotSetPriceFeedWithZeroDecimals() public {
-        MockAggregatorV3 invalidPriceFeed = new MockAggregatorV3(INITIAL_BTC_PRICE, 0);
-
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidPriceFeed.selector, address(invalidPriceFeed)));
-        feeRule.setPriceFeed(address(invalidPriceFeed));
-    }
-
-    function testSetFeeToken() public {
-        MockERC20 newFeeToken = new MockERC20("New Bitcoin", "NBTC", TOKEN_DECIMALS);
-
-        vm.prank(owner);
-        feeRule.setFeeToken(address(newFeeToken));
-
-        assertEq(feeRule.feeToken(), address(newFeeToken));
-    }
-
-    function testCannotSetZeroAddressFeeToken() public {
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(APROBTCFeeRule.InvalidFeeToken.selector, address(0)));
-        feeRule.setFeeToken(address(0));
-    }
-
     // Test price changes affecting fee calculation
     function testCalculateFeeWithPriceChange() public {
         // Initial calculation
@@ -300,7 +241,8 @@ contract APROBTCFeeRuleTest is Test {
         uint256 maxTargetValue = type(uint256).max / (10 ** TOKEN_DECIMALS); // Avoid overflow in calculation
 
         vm.startPrank(owner);
-        APROBTCFeeRule newFeeRule = new APROBTCFeeRule(maxTargetValue, address(feeToken), address(priceFeed));
+        APROBTCFeeRule newFeeRule =
+            new APROBTCFeeRule(maxTargetValue, address(feeToken), address(priceFeed), STALE_PERIOD);
         vm.stopPrank();
 
         assertEq(newFeeRule.targetValue(), maxTargetValue);

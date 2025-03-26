@@ -18,50 +18,57 @@ To integrate GOAT VRF into your smart contract, implement the `IRandomnessCallba
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract MyRandomContract is IRandomnessCallback {
+    using SafeERC20 for IERC20;
+   
     // GoatVRF contract address
     address public goatVRF;
     
     constructor(address goatVRF_) {
         goatVRF = goatVRF_;
     }
-    
+
     /**
      * @dev Request randomness from GoatVRF
+     * @param maxAllowedGasPrice Maximum allowed gas price for fulfillment
      * @return requestId Unique identifier for the request
      */
-    function getRandom() external returns (uint256 requestId) {
-        // Get the fee token address from GoatVRF
-        address tokenAddress = IGoatVRF(goatVRF).feeToken();
-        IERC20 token = IERC20(tokenAddress);
-        // How much gas will be used for callback
-        uint256 callbackGas = 600000;
-        
-        // Calculate fee with sufficient gas for callback (assume callback needs 600,000 gas)
-        uint256 fee = IGoatVRF(goatVRF).calculateFee(callbackGas);
-        // You must approve enough allowance for the goat vrf contract, otherwise the fee charge will fail.
-        // Please make sure you have enough $WGOATBTC in your contract.
-        require(token.approve(goatVRF, fee), "Token approval failed");
-        
-        // Get beacon for deadline calculation
-        IDrandBeacon beacon = IDrandBeacon(IGoatVRF(goatVRF).beacon());
-        
-        // Max gas price you accept, if the gas price is higher than this, the request will 
-        // not be submitted until the gas price is lower than this.
-        uint256 maxGasPrice = 0.01 gwei; // Adjust as needed
+   function getNewRandom(uint256 maxAllowedGasPrice) external onlyOwner returns (uint256 requestId) {
+      // Get the WGOATBTC token address from GoatVRF
+      address tokenAddress = IGoatVRF(goatVRF).feeToken();
+      // Gas limit for the callback function, this should be set to a reasonable value
+      uint256 callbackGas = 600000;
 
-        // Future time to fulfill the randomness, randomness will not be fufilled until this time.
-        // If you want a immediate fufillment, you can set deadline as the following.
-        // But please notice that the deadline must be smaller than block.timestamp + 7 days,
-        // otherwise we will reject the request.
-        uint256 deadline = block.timestamp + beacon.period();
-        // Request randomness with the max gas price you accept and the callback gas to your receiveRandomness method.
-        return IGoatVRF(goatVRF).getNewRandom(deadline, maxGasPrice, callbackGas);
-    }
+      // Calculate fee with sufficient gas for callback
+      // The callback is simple, but we allocate extra gas to be safe
+      uint256 fee = IGoatVRF(goatVRF).calculateFeeWithGasPrice(callbackGas, maxAllowedGasPrice);
+
+      // Transfer tokens from caller to this contract if needed
+      // This step is optional depending on your token handling strategy
+
+      // Approve GoatVRF to spend tokens
+      IERC20 token = IERC20(tokenAddress);
+      // Since the underlying token is WGOATBTC (wrapped BTC in GOAT network), and the price is fetched from the price feed oracle in realtime,
+      // we need to ensure that the contract has enough allowance for the fee. So it is better to apply a safety margin
+      // to avoid any issues with gas price fluctuations. 50% is just a suggested value, you can adjust it as needed.
+      // If you do not want to approve the token every time, you can also approve all of your budget at once.
+      // Even if you approved the contract with a higher amount, the fee will be calculated based on
+      // the gas price at the time of the request and actual usage, so you will not be charged more than the fee.
+      uint256 safetyMargin = fee * 3 / 2;
+      token.forceApprove(goatVRF, safetyMargin);
+
+      // Get beacon for deadline calculation
+      IDrandBeacon beacon = IDrandBeacon(IGoatVRF(goatVRF).beacon());
+
+      // Request randomness with appropriate deadline
+      uint256 deadline = block.timestamp + beacon.period();
+      requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, callbackGas);
+   }
     
     /**
      * @dev Callback function used by GoatVRF to deliver randomness
@@ -191,9 +198,9 @@ GOAT VRF supports two types of fee rules:
 |-----------------------|---------------------------------------------------------------|
 | Fee Token             | 0xbC10000000000000000000000000000000000000                     |
 | Beacon Type           | BN254                                                         |
-| Beacon                | 0x5FdB524cB7a66EE226Fc9ae475DAf0151055BF22                     |
+| Beacon                | 0x46d74aB88fd5894F82d150ec18912aCC9df80663                     |
 | Fee Rule Type         | APRO_BTC                                                      |
-| Fee Rule              | 0xeBE7471D170996D60d271E2c3B194751e7B236A2                     |
+| Fee Rule              | 0x647063E7eb8ee8163aDF45B18e149A093e3C8e37                     |
 | Target Value          | 10000000                                                      |
 | Price Feed            | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef                     |
 | Fee Recipient         | 0xF51d148D4A7ae851c1d5641763081023938c6342                     |
@@ -201,7 +208,7 @@ GOAT VRF supports two types of fee rules:
 | Overhead Gas          | 200000                                                        |
 | Max Deadline Delta    | 604800                                                        |
 | Request Expire Time   | 604800                                                        |
-| GoatVRF Proxy         | 0x9ed0FB1dd76E06f5c72a066676237fcaACB6AEC9                     |
+| GoatVRF Proxy         | 0xa3aeBE2F0d9daDac9E8111D9D41671A510FFB2ca                     |
 
 - **Mainnet**: `TBD`
 

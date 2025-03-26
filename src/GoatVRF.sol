@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IRandomnessCallback.sol";
 import "./interfaces/IDrandBeacon.sol";
 import "./interfaces/IGoatVRF.sol";
@@ -14,35 +14,43 @@ import "./interfaces/IFeeRule.sol";
 
 /**
  * @title GoatVRF
- * @dev Main contract for the GoatVRF service that provides verifiable random functions
- * Implements UUPS upgradeable pattern with OpenZeppelin libraries
+ * @dev Main contract for the GoatVRF service that provides verifiable random functions.
+ * Implements UUPS upgradeable pattern with OpenZeppelin libraries.
  */
 contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, IGoatVRF {
-    // Gas utility for exact gas forwarding
+    using SafeERC20 for IERC20;
+
+    /**
+     * @dev This constant represents the gas buffer used in the _callWithExactGas method.
+     * We subtract it from the parent's remaining gas to ensure we still have enough gas
+     * for safety checks and potential reverts after the call.
+     */
     uint256 internal constant GAS_FOR_CALL_EXACT_CHECK = 5000;
 
-    // Storage variables
+    // Immutable variables
+    uint256 internal immutable OVERHEAD_GAS;
+    // Maximum deadline delta in seconds, e.g. if set to 7 days, the user can request randomness
+    // up to 7 days in the future.
+    uint256 internal immutable MAX_DEADLINE_DELTA;
+    // Request expiration time in seconds, e.g. if set to 7 days, the request will be considered
+    // expired if not fulfilled within 7 days.
+    uint256 internal immutable REQUEST_EXPIRE_TIME;
+    // Maximum callback gas allowed
+    uint256 internal immutable MAX_CALLBACK_GAS;
+    // ERC20 token address for fee payment
+    address internal immutable FEE_TOKEN;
+
     struct GoatVRFConfig {
         // Current beacon address
         address beacon;
-        // Fee token address
-        address feeToken;
         // Fee recipient address
         address feeRecipient;
         // Authorized relayer address
         address relayer;
         // Fee rule contract address
         address feeRule;
-        // Maximum deadline delta (in seconds)
-        uint256 maxDeadlineDelta;
         // Next request ID to be assigned
         uint256 nextRequestId;
-        // Overhead gas amount to add to actual gas used
-        uint256 overheadGas;
-        // Request expiration time (in seconds)
-        uint256 requestExpireTime;
-        // Maximum callback gas amount
-        uint256 maxCallbackGas;
     }
 
     // Main configuration
@@ -71,27 +79,55 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     /**
-     * @dev Initializer function (replaces constructor in upgradeable contracts)
-     * @param beacon_ Address of the drand beacon
+     * @dev Constructor func
      * @param feeToken_ Address of the ERC20 token to pay the fee
-     * @param feeRecipient_ Address of the fee recipient
-     * @param relayer_ Address of the authorized relayer
-     * @param feeRule_ Address of the fee rule contract
      * @param maxDeadlineDelta_ Maximum deadline delta in seconds
      * @param overheadGas_ Overhead gas amount
      * @param requestExpireTime_ Request expiration time in seconds
+     * @param maxCallbackGas_ Maximum callback gas allowed
      */
-    function initialize(
-        address beacon_,
+    constructor(
         address feeToken_,
-        address feeRecipient_,
-        address relayer_,
-        address feeRule_,
         uint256 maxDeadlineDelta_,
         uint256 overheadGas_,
         uint256 requestExpireTime_,
         uint256 maxCallbackGas_
-    ) external initializer {
+    ) {
+        if (feeToken_ == address(0)) {
+            revert InvalidToken(feeToken_);
+        }
+        if (requestExpireTime_ == 0) {
+            revert InvalidRequestExpireTime(requestExpireTime_);
+        }
+        if (maxCallbackGas_ == 0) {
+            revert InvalidCallbackGas(maxCallbackGas_);
+        }
+        if (maxDeadlineDelta_ == 0) {
+            revert InvalidDeadline(maxDeadlineDelta_);
+        }
+
+        MAX_CALLBACK_GAS = maxCallbackGas_;
+        OVERHEAD_GAS = overheadGas_;
+        MAX_DEADLINE_DELTA = maxDeadlineDelta_;
+        REQUEST_EXPIRE_TIME = requestExpireTime_;
+        FEE_TOKEN = feeToken_;
+
+        _disableInitializers();
+    }
+
+    /**
+     * @dev Initializer function (replaces constructor in upgradeable contracts).
+     *      *IMPORTANT*: For production, set the 'owner' to a multisig or timelock to reduce centralization risk.
+     *
+     * @param beacon_ Address of the drand beacon
+     * @param feeRecipient_ Address of the fee recipient
+     * @param relayer_ Address of the authorized relayer
+     * @param feeRule_ Address of the fee rule contract
+     */
+    function initialize(address beacon_, address feeRecipient_, address relayer_, address feeRule_)
+        external
+        initializer
+    {
         // Initialize parent contracts
         __Ownable_init(msg.sender);
         __ReentrancyGuard_init();
@@ -100,9 +136,6 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         // Validate parameters
         if (beacon_ == address(0)) {
             revert InvalidBeacon(beacon_);
-        }
-        if (feeToken_ == address(0)) {
-            revert InvalidToken(feeToken_);
         }
         if (feeRecipient_ == address(0)) {
             revert InvalidFeeRecipient(feeRecipient_);
@@ -113,35 +146,19 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         if (feeRule_ == address(0)) {
             revert InvalidFeeRule(feeRule_);
         }
-        if (requestExpireTime_ == 0) {
-            revert InvalidRequestExpireTime(requestExpireTime_);
-        }
-        if (maxCallbackGas_ == 0) {
-            revert InvalidCallbackGas(maxCallbackGas_);
-        }
 
         // Set configuration
         _config.beacon = beacon_;
-        _config.feeToken = feeToken_;
         _config.feeRecipient = feeRecipient_;
         _config.relayer = relayer_;
         _config.feeRule = feeRule_;
-        _config.maxDeadlineDelta = maxDeadlineDelta_;
         _config.nextRequestId = 1;
-        _config.overheadGas = overheadGas_;
-        _config.requestExpireTime = requestExpireTime_;
-        _config.maxCallbackGas = maxCallbackGas_;
 
         // Emit events
         emit ConfigUpdated("beacon", abi.encode(beacon_));
-        emit ConfigUpdated("feeToken", abi.encode(feeToken_));
         emit ConfigUpdated("feeRecipient", abi.encode(feeRecipient_));
         emit ConfigUpdated("relayer", abi.encode(relayer_));
         emit ConfigUpdated("feeRule", abi.encode(feeRule_));
-        emit ConfigUpdated("maxDeadlineDelta", abi.encode(maxDeadlineDelta_));
-        emit ConfigUpdated("overheadGas", abi.encode(overheadGas_));
-        emit ConfigUpdated("requestExpireTime", abi.encode(requestExpireTime_));
-        emit ConfigUpdated("maxCallbackGas", abi.encode(maxCallbackGas_));
     }
 
     /**
@@ -157,7 +174,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @return tokenAddr The token address
      */
     function feeToken() external view override returns (address tokenAddr) {
-        return _config.feeToken;
+        return FEE_TOKEN;
     }
 
     /**
@@ -189,7 +206,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @return maxDelta The maximum deadline delta
      */
     function maxDeadlineDelta() external view returns (uint256 maxDelta) {
-        return _config.maxDeadlineDelta;
+        return MAX_DEADLINE_DELTA;
     }
 
     /**
@@ -197,7 +214,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @return callbackGas The maximum callback gas amount
      */
     function maxCallbackGas() external view returns (uint256 callbackGas) {
-        return _config.maxCallbackGas;
+        return MAX_CALLBACK_GAS;
     }
 
     /**
@@ -213,25 +230,43 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @return expireTime The request expiration time in seconds
      */
     function requestExpireTime() external view returns (uint256 expireTime) {
-        return _config.requestExpireTime;
+        return REQUEST_EXPIRE_TIME;
     }
 
     /**
      * @dev Calculate fee for a randomness request
      * @param gas Amount of gas will be using
      * @return totalFee Total fee for the request
+     *
+     * Note: This function uses msg.sender to identify the requester. For auditing
+     * reasons, consider having an explicit parameter if you need to calculate fees
+     * for another address.
      */
     function calculateFee(uint256 gas) external view override returns (uint256 totalFee) {
+        return calculateFee(msg.sender, gas);
+    }
+
+    /**
+     * @dev Calculate fee for a randomness request
+     * @param addr Address of the requester
+     * @param gas Amount of gas will be using
+     * @return totalFee Total fee for the request
+     *
+     * Note: This function uses msg.sender to identify the requester. For auditing
+     * reasons, consider having an explicit parameter if you need to calculate fees
+     * for another address.
+     */
+    function calculateFee(address addr, uint256 gas) public view override returns (uint256 totalFee) {
         // If gas is 0, we're calculating the fee before the request is fulfilled
         if (gas == 0) {
-            return IFeeRule(_config.feeRule).calculateFee(msg.sender, 0);
+            return IFeeRule(_config.feeRule).calculateFee(addr, 0);
         }
 
         // Calculate gas fee with overhead
-        uint256 totalGasUsed = gas + _config.overheadGas;
+        uint256 totalGasUsed = gas + OVERHEAD_GAS;
 
         // Use the fee rule to calculate total fee
-        return IFeeRule(_config.feeRule).calculateFee(msg.sender, totalGasUsed);
+        return IFeeRule(_config.feeRule).calculateFee(addr, totalGasUsed);
     }
 
     /**
@@ -246,21 +281,39 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         override
         returns (uint256 totalFee)
     {
+        return calculateFeeWithGasPrice(msg.sender, gas, gasPrice);
+    }
+
+    /**
+     * @dev Calculate fee for a randomness request with custom gas price
+     * @param addr Address of the requester
+     * @param gas Amount of gas will be using
+     * @param gasPrice Custom gas price to use for calculation
+     * @return totalFee Total fee for the request
+     */
+    function calculateFeeWithGasPrice(address addr, uint256 gas, uint256 gasPrice)
+        public
+        view
+        override
+        returns (uint256 totalFee)
+    {
         // If gas is 0, we're calculating the fee before the request is fulfilled
         if (gas == 0) {
-            return IFeeRule(_config.feeRule).calculateFeeWithGasPrice(msg.sender, 0, gasPrice);
+            return IFeeRule(_config.feeRule).calculateFeeWithGasPrice(addr, 0, gasPrice);
         }
 
         // Calculate gas fee with overhead
-        uint256 totalGasUsed = gas + _config.overheadGas;
+        uint256 totalGasUsed = gas + OVERHEAD_GAS;
 
         // Use the fee rule to calculate total fee with the provided gas price
-        return IFeeRule(_config.feeRule).calculateFeeWithGasPrice(msg.sender, totalGasUsed, gasPrice);
+        return IFeeRule(_config.feeRule).calculateFeeWithGasPrice(addr, totalGasUsed, gasPrice);
     }
 
     /**
      * @dev Set new beacon address
      * @param beacon_ New beacon address
+     *
+     * For decentralized usage, the owner should be a timelock or multi-signature address.
      */
     function setBeacon(address beacon_) external onlyOwner {
         if (beacon_ == address(0)) {
@@ -268,18 +321,6 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         }
         _config.beacon = beacon_;
         emit ConfigUpdated("beacon", abi.encode(beacon_));
-    }
-
-    /**
-     * @dev Set new token address
-     * @param token_ New token address
-     */
-    function setFeeToken(address token_) external onlyOwner {
-        if (token_ == address(0)) {
-            revert InvalidToken(token_);
-        }
-        _config.feeToken = token_;
-        emit ConfigUpdated("token", abi.encode(token_));
     }
 
     /**
@@ -319,57 +360,11 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
     }
 
     /**
-     * @dev Set new maximum deadline delta
-     * @param maxDeadlineDelta_ New maximum deadline delta
-     */
-    function setMaxDeadlineDelta(uint256 maxDeadlineDelta_) external onlyOwner {
-        if (maxDeadlineDelta_ == 0) {
-            revert InvalidMaxDeadlineDelta(maxDeadlineDelta_);
-        }
-
-        _config.maxDeadlineDelta = maxDeadlineDelta_;
-        emit ConfigUpdated("maxDeadlineDelta", abi.encode(maxDeadlineDelta_));
-    }
-
-    /**
-     * @dev Set the overhead gas amount
-     * @param overheadGas_ The new overhead gas amount
-     */
-    function setOverheadGas(uint256 overheadGas_) external onlyOwner {
-        _config.overheadGas = overheadGas_;
-        emit ConfigUpdated("overheadGas", abi.encode(overheadGas_));
-    }
-
-    /**
-     * @dev Set the request expiration time
-     * @param requestExpireTime_ The new request expiration time in seconds
-     */
-    function setRequestExpireTime(uint256 requestExpireTime_) external onlyOwner {
-        if (requestExpireTime_ == 0) {
-            revert InvalidRequestExpireTime(requestExpireTime_);
-        }
-        _config.requestExpireTime = requestExpireTime_;
-        emit ConfigUpdated("requestExpireTime", abi.encode(requestExpireTime_));
-    }
-
-    /**
-     * @dev Set the maximum callback gas amount
-     * @param maxCallbackGas_ The new maximum callback gas amount
-     */
-    function setMaxCallbackGas(uint256 maxCallbackGas_) external onlyOwner {
-        if (maxCallbackGas_ == 0) {
-            revert InvalidCallbackGas(maxCallbackGas_);
-        }
-        _config.maxCallbackGas = maxCallbackGas_;
-        emit ConfigUpdated("maxCallbackGas", abi.encode(maxCallbackGas_));
-    }
-
-    /**
      * @dev Get the current overhead gas amount
      * @return The overhead gas amount
      */
     function overheadGas() external view returns (uint256) {
-        return _config.overheadGas;
+        return OVERHEAD_GAS;
     }
 
     /**
@@ -386,10 +381,22 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         address requester,
         uint256 maxAllowedGasPrice,
         uint256 callbackGas,
-        uint256 round
+        uint256 round,
+        address beaconAddr,
+        address feeRuleAddr
     ) internal view returns (bytes32 requestHash) {
         return keccak256(
-            abi.encode(block.chainid, address(this), requestId, requester, maxAllowedGasPrice, callbackGas, round)
+            abi.encode(
+                block.chainid,
+                address(this),
+                requestId,
+                requester,
+                maxAllowedGasPrice,
+                callbackGas,
+                round,
+                beaconAddr,
+                feeRuleAddr
+            )
         );
     }
 
@@ -407,7 +414,7 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         returns (uint256 requestId)
     {
         // Validate callback gas
-        if (callbackGas > _config.maxCallbackGas || callbackGas == 0) {
+        if (callbackGas > MAX_CALLBACK_GAS || callbackGas == 0) {
             revert InvalidCallbackGas(callbackGas);
         }
 
@@ -423,8 +430,8 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
 
         // Validate deadline
         if (
-            (deadline > block.timestamp + _config.maxDeadlineDelta) || (deadline < genesis)
-                || deadline < (block.timestamp + period)
+            (deadline > block.timestamp + MAX_DEADLINE_DELTA) || (deadline < genesis)
+                || (deadline < (block.timestamp + period))
         ) {
             revert InvalidDeadline(deadline);
         }
@@ -433,11 +440,11 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         uint256 delta = deadline - genesis;
         uint256 round = (delta / period) + ((delta % period > 0) ? 1 : 0);
 
-        // Calculate the fixed fee for the request
-        uint256 intrinsicFee = IFeeRule(_config.feeRule).calculateFee(msg.sender, 0);
+        // Calculate the fixed fee for the request (for pre-check only)
+        uint256 intrinsicFee = calculateFeeWithGasPrice(msg.sender, callbackGas, maxAllowedGasPrice);
 
-        // Check user's allowance and balance for the fixed fee
-        IERC20 token = IERC20(_config.feeToken);
+        // Check user's allowance and balance for that fixed fee
+        IERC20 token = IERC20(FEE_TOKEN);
         uint256 allowance = token.allowance(msg.sender, address(this));
         uint256 balance = token.balanceOf(msg.sender);
 
@@ -451,17 +458,19 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
 
         // Get request ID
         requestId = _config.nextRequestId++;
+        address beaconAddr = _config.beacon;
+        address feeRuleAddr = _config.feeRule;
 
         // Store digested request
-        bytes32 requestHash = _digestRequest(requestId, msg.sender, maxAllowedGasPrice, callbackGas, round);
-
+        bytes32 requestHash =
+            _digestRequest(requestId, msg.sender, maxAllowedGasPrice, callbackGas, round, beaconAddr, feeRuleAddr);
         _requestHashes[requestId] = requestHash;
         _requestStates[requestId] = RequestState.Pending;
         _requesters[requestId] = msg.sender;
-        _requestTimestamps[requestId] = block.timestamp;
+        _requestTimestamps[requestId] = deadline;
 
         // Emit event
-        emit NewRequest(requestId, msg.sender, maxAllowedGasPrice, callbackGas, round);
+        emit NewRequest(requestId, msg.sender, beaconAddr, feeRuleAddr, maxAllowedGasPrice, callbackGas, round);
 
         return requestId;
     }
@@ -473,6 +482,8 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @param maxAllowedGasPrice The maximum allowed gas price
      * @param callbackGas Amount of gas allocated for the callback
      * @param round The round number for verification
+     * @param beaconAddr The address of the drand beacon
+     * @param feeRuleAddr The address of the fee rule contract
      * @param signature The signature from the drand beacon
      */
     function fulfillRequest(
@@ -481,16 +492,22 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         uint256 maxAllowedGasPrice,
         uint256 callbackGas,
         uint256 round,
+        address beaconAddr,
+        address feeRuleAddr,
         bytes calldata signature
-    ) external onlyRelayer nonReentrant {
+    ) external nonReentrant onlyRelayer {
+        if (beaconAddr == address(0)) {
+            revert InvalidBeacon(beaconAddr);
+        }
+
         // Validate request state
         if (_requestStates[requestId] != RequestState.Pending) {
             revert RequestNotPending(requestId);
         }
 
         // Check if request has expired
-        if (block.timestamp > _requestTimestamps[requestId] + _config.requestExpireTime) {
-            revert RequestExpired(_config.requestExpireTime);
+        if (block.timestamp > _requestTimestamps[requestId] + REQUEST_EXPIRE_TIME) {
+            revert RequestExpired(REQUEST_EXPIRE_TIME);
         }
 
         // Check gas price
@@ -499,44 +516,49 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
         }
 
         // Verify request hash
-        bytes32 requestHash = _digestRequest(requestId, requester, maxAllowedGasPrice, callbackGas, round);
-
+        bytes32 requestHash =
+            _digestRequest(requestId, requester, maxAllowedGasPrice, callbackGas, round, beaconAddr, feeRuleAddr);
         if (_requestHashes[requestId] != requestHash) {
             revert InvalidRequestHash(requestHash);
         }
 
         // Verify the beacon signature - will revert if invalid
-        IDrandBeacon(_config.beacon).verifyBeaconRound(round, signature);
+        IDrandBeacon(beaconAddr).verifyBeaconRound(round, signature);
 
         // Generate randomness using signature and request data
         uint256 randomness =
             uint256(keccak256(abi.encode(keccak256(signature), block.chainid, address(this), requestId, requester)));
 
-        // Mark request as fulfilled
+        // Mark request as fulfilled (tentatively)
         _requestStates[requestId] = RequestState.Fulfilled;
 
         // Prepare callback
-        IRandomnessCallback callback = IRandomnessCallback(requester);
+        IRandomnessCallback callbackContract = IRandomnessCallback(requester);
 
-        uint256 remainingGas = gasleft();
+        // We do a precise gas check approach
+        uint256 startGas = gasleft();
         uint256 requiredGas = callbackGas + GAS_FOR_CALL_EXACT_CHECK;
-        if (remainingGas < callbackGas + GAS_FOR_CALL_EXACT_CHECK) {
-            revert InsufficientGasForCallback(requiredGas, remainingGas);
+
+        if (startGas < requiredGas) {
+            revert InsufficientGasForCallback(requiredGas, startGas);
         }
 
-        // Call the callback with remaining gas
+        // Call the callback with exact gas
         bool success = _callWithExactGas(
             requiredGas,
-            address(callback),
-            abi.encodeWithSelector(callback.receiveRandomness.selector, requestId, randomness)
+            requester,
+            abi.encodeWithSelector(callbackContract.receiveRandomness.selector, requestId, randomness)
         );
+        uint256 gasUsed = startGas - gasleft();
 
-        // Update request state if callback failed
         if (!success) {
+            // If callback fails, mark as Failed
             _requestStates[requestId] = RequestState.Failed;
+            emit CallbackFailed(requestId, requester);
         }
 
-        uint256 totalFee = _processPayment(requester, requiredGas);
+        // Process the payment
+        uint256 totalFee = _processPayment(requester, gasUsed, feeRuleAddr);
 
         // Emit fulfillment event
         emit RequestFulfilled(requestId, randomness, success, totalFee);
@@ -567,29 +589,29 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
     /**
      * @dev Process payment for a request
      * @param requester The requester address
-     * @param gasUsed The amount of gas used
+     * @param gasUsed The amount of gas used (callbackGas + buffer in minimal fix)
+     * @param feeRuleAddr The fee rule contract address
      * @return totalFee The total fee charged
      */
-    function _processPayment(address requester, uint256 gasUsed) internal returns (uint256 totalFee) {
-        // Add overhead gas to the actual gas used
-        uint256 totalGasUsed = gasUsed + _config.overheadGas;
+    function _processPayment(address requester, uint256 gasUsed, address feeRuleAddr)
+        internal
+        returns (uint256 totalFee)
+    {
+        // Add overhead gas to the user-specified gas usage
+        uint256 totalGasUsed = gasUsed + OVERHEAD_GAS;
 
         // Calculate fee using fee rule
-        totalFee = IFeeRule(_config.feeRule).calculateFee(requester, totalGasUsed);
+        totalFee = IFeeRule(feeRuleAddr).calculateFee(requester, totalGasUsed);
 
-        // Transfer tokens
-        bool success = IERC20(_config.feeToken).transferFrom(requester, _config.feeRecipient, totalFee);
-        if (!success) {
-            revert PaymentProcessingFailed(0, "Transfer failed");
-        }
-
+        // Transfer tokens (basic check for success)
+        IERC20(FEE_TOKEN).safeTransferFrom(requester, _config.feeRecipient, totalFee);
         return totalFee;
     }
 
     /**
      * @dev Get the request timestamp
      * @param requestId Unique identifier for the request
-     * @return timestamp Timestamp when the request was created
+     * @return timestamp Timestamp when the request will be executed
      */
     function getRequestTimestamp(uint256 requestId) external view returns (uint256 timestamp) {
         return _requestTimestamps[requestId];
@@ -599,15 +621,18 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
      * @dev Get the state of a randomness request
      * @param requestId Unique identifier for the request
      * @return state Current state of the request
+     *
+     * If the request is pending and the current time has exceeded requestExpireTime,
+     * we return Expired instead of Cancelled (which was a misleading outcome).
      */
     function getRequestState(uint256 requestId) external view override returns (RequestState state) {
         state = _requestStates[requestId];
         if (state == RequestState.Pending) {
-            if (block.timestamp > _requestTimestamps[requestId] + _config.requestExpireTime) {
-                state = RequestState.Cancelled;
+            // Check for expiration
+            if (block.timestamp > _requestTimestamps[requestId] + REQUEST_EXPIRE_TIME) {
+                state = RequestState.Expired;
             }
         }
-
         return state;
     }
 
@@ -629,16 +654,41 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /**
-     * @dev Call a function with exact gas
-     * @param gasAmount Amount of gas to forward
+     * @dev Call a function with exact gas, ensuring that if the parent contract cannot
+     * provide enough gas (due to EIP-150's 63/64 rule), it will revert rather than
+     * silently passing less gas to the callee.
+     *
+     * @param gasAmount Amount of gas to forward (expected to be exact, including a small buffer)
      * @param target Address to call
      * @param data Call data
      * @return success Whether the call succeeded
      */
     function _callWithExactGas(uint256 gasAmount, address target, bytes memory data) private returns (bool success) {
-        // Call with exact gas
         assembly {
-            // Call with all but GAS_FOR_CALL_EXACT_CHECK gas
+            // Read the current gas left
+            let g := gas()
+
+            // If we don't have enough gas to handle the post-check logic, revert
+            if lt(g, GAS_FOR_CALL_EXACT_CHECK) {
+                let ptr := mload(0x40)
+                mstore(ptr, 0x4E6F2047617320466F722043616C6C20457861637420436865636B000000)
+                // "No gas for call exact check"
+                revert(ptr, 0x20)
+            }
+
+            // Subtract the buffer from total available gas
+            g := sub(g, GAS_FOR_CALL_EXACT_CHECK)
+
+            // After EIP-150, actual gas for call is ~ (g - g//64).
+            // If (g - g//64) < gasAmount, revert to avoid partial gas forward.
+            if iszero(gt(sub(g, div(g, 64)), gasAmount)) {
+                let ptr := mload(0x40)
+                mstore(ptr, 0x4E6F7420656E6F7567682067617320666F722063616C6C00000000000000)
+                // "Not enough gas for call"
+                revert(ptr, 0x1C)
+            }
+
+            // Perform the call with the specified gasAmount
             success :=
                 call(
                     gasAmount, // gas
@@ -650,7 +700,6 @@ contract GoatVRF is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeabl
                     0 // output area length
                 )
         }
-
         return success;
     }
 }

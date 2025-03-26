@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "./interfaces/IFeeRule.sol";
 import "./interfaces/apro/IAggregatorV3.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20} from
+    "../lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
 /**
  * @title APROBTCFeeRule
- * @dev Implementation of IFeeRule with a dynamic fee with APRO price feed plus gas cost model
+ * @dev Implementation of IFeeRule with a dynamic fee with APRO price feed plus gas cost model.
+ *  Please note that this fee rule only supports native token wrapper, if you are using a non-native token as fee token,
+ *  it will lead to unexpected behavior.
  */
-contract APROBTCFeeRule is Ownable, IFeeRule {
+contract APROBTCFeeRule is IFeeRule {
     // Target value for the fee
-    uint256 private _targetValue;
-    IAggregatorV3 private _priceFeed;
-    uint8 private _priceFeedDecimals;
-    ERC20 private _feeToken;
-
-    // Events
-    event FeeUpdated(uint256 newTarget);
-    event PriceFeedUpdated(address newPriceFeed);
-    event FeeTokenUpdated(address newFeeToken);
+    uint256 private immutable _targetValue;
+    IAggregatorV3 private immutable _priceFeed;
+    uint8 private immutable _priceFeedDecimals;
+    ERC20 private immutable _feeToken;
+    uint256 private immutable _stalePeriod;
 
     // Error messages
     error InvalidFee(uint256 target);
@@ -30,12 +30,15 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
     error InvalidTotalDecimals(uint8 decimals);
     error IncompleteRound(uint80 roundId);
     error PriceFeedDecimalsMismatch(uint256 newDecimals, uint256 oldDecimals);
+    error InvalidFeeTokenDecimals(uint256 decimals);
+    error InvalidStalePeriod(uint256 stalePeriod);
+    error PriceOracleStale(uint256 updatedAt, uint256 stalePeriod);
 
     /**
      * @dev Constructor
      * @param target_ Initial target fee amount in USD
      */
-    constructor(uint256 target_, address feeToken_, address priceFeed_) Ownable(msg.sender) {
+    constructor(uint256 target_, address feeToken_, address priceFeed_, uint256 stalePeriod_) {
         if (target_ == 0) {
             revert InvalidFee(target_);
         }
@@ -45,7 +48,15 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
         if (feeToken_ == address(0)) {
             revert InvalidFeeToken(feeToken_);
         }
+        if (stalePeriod_ == 0) {
+            revert InvalidStalePeriod(stalePeriod_);
+        }
+        uint8 feeTokenDecimals = ERC20(feeToken_).decimals();
+        if (feeTokenDecimals != 18) {
+            revert InvalidFeeTokenDecimals(feeTokenDecimals);
+        }
 
+        _stalePeriod = stalePeriod_;
         _targetValue = target_;
         _priceFeed = IAggregatorV3(priceFeed_);
         _feeToken = ERC20(feeToken_);
@@ -56,10 +67,6 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
         }
 
         _priceFeedDecimals = priceFeedDecimals;
-
-        emit FeeUpdated(target_);
-        emit PriceFeedUpdated(address(priceFeed_));
-        emit FeeTokenUpdated(address(_feeToken));
     }
 
     /**
@@ -86,11 +93,10 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
         (uint80 roundId, int256 feeTokenPrice,, uint256 updatedAt,) = _priceFeed.latestRoundData();
         uint8 feeTokenDecimals = _feeToken.decimals();
         uint8 priceFeedDecimals = _priceFeed.decimals();
-        uint8 savedPriceFeedDecimals = _priceFeedDecimals;
 
         // These checks are to ensure that the price feed is not manipulated by the oracle
-        if (priceFeedDecimals != savedPriceFeedDecimals) {
-            revert PriceFeedDecimalsMismatch(priceFeedDecimals, savedPriceFeedDecimals);
+        if (priceFeedDecimals != _priceFeedDecimals) {
+            revert PriceFeedDecimalsMismatch(priceFeedDecimals, _priceFeedDecimals);
         }
 
         if (feeTokenPrice <= 0) {
@@ -99,6 +105,10 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
 
         if (updatedAt == 0) {
             revert IncompleteRound(roundId);
+        }
+
+        if (block.timestamp - updatedAt > _stalePeriod) {
+            revert PriceOracleStale(updatedAt, block.timestamp - updatedAt);
         }
 
         // avoid overflow in fee calculation
@@ -154,43 +164,10 @@ contract APROBTCFeeRule is Ownable, IFeeRule {
     }
 
     /**
-     * @dev Set the target value
-     * @param target_ The new target value
+     * @dev Get the current stale period
+     * @return The stale period in seconds
      */
-    function setTargetValue(uint256 target_) external onlyOwner {
-        if (target_ == 0) {
-            revert InvalidFee(target_);
-        }
-        _targetValue = target_;
-        emit FeeUpdated(target_);
-    }
-
-    /**
-     * @dev Set the price feed
-     * @param priceFeed_ The new price feed
-     */
-    function setPriceFeed(address priceFeed_) external onlyOwner {
-        if (priceFeed_ == address(0)) {
-            revert InvalidPriceFeed(priceFeed_);
-        }
-        _priceFeed = IAggregatorV3(priceFeed_);
-        uint256 priceFeedDecimals = _priceFeed.decimals();
-        if (priceFeedDecimals == 0) {
-            revert InvalidPriceFeed(priceFeed_);
-        }
-
-        emit PriceFeedUpdated(priceFeed_);
-    }
-
-    /**
-     * @dev Set the fee token
-     * @param feeToken_ The new fee token
-     */
-    function setFeeToken(address feeToken_) external onlyOwner {
-        if (feeToken_ == address(0)) {
-            revert InvalidFeeToken(feeToken_);
-        }
-        _feeToken = ERC20(feeToken_);
-        emit FeeTokenUpdated(feeToken_);
+    function stalePeriod() external view returns (uint256) {
+        return _stalePeriod;
     }
 }

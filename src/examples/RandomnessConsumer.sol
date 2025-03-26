@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IDrandBeacon.sol";
 import "../interfaces/IRandomnessCallback.sol";
 import "../interfaces/IGoatVRF.sol";
@@ -12,6 +13,8 @@ import "../interfaces/IGoatVRF.sol";
  * @dev Example contract demonstrating how to consume randomness from GoatVRF
  */
 contract RandomnessConsumer is Ownable, IRandomnessCallback {
+    using SafeERC20 for IERC20;
+
     // GoatVRF contract address
     address public goatVRF;
 
@@ -32,6 +35,8 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
 
     /**
      * @dev Update the GoatVRF contract address
+     *      Note: This is centralized in the owner. For real decentralized usage,
+     *      consider restricting changes via timelock + multiSig, or removing this function entirely.
      * @param goatVRF_ New GoatVRF contract address
      */
     function setGoatVRF(address goatVRF_) external onlyOwner {
@@ -47,24 +52,33 @@ contract RandomnessConsumer is Ownable, IRandomnessCallback {
         // Get the WGOATBTC token address from GoatVRF
         address tokenAddress = IGoatVRF(goatVRF).feeToken();
 
+        // Gas limit for the callback function, this should be set to a reasonable value
+        uint256 callbackGas = 600000;
+
         // Calculate fee with sufficient gas for callback
         // The callback is simple, but we allocate extra gas to be safe
-        uint256 fee = IGoatVRF(goatVRF).calculateFee(600000);
+        uint256 fee = IGoatVRF(goatVRF).calculateFeeWithGasPrice(callbackGas, maxAllowedGasPrice);
 
         // Transfer tokens from caller to this contract if needed
         // This step is optional depending on your token handling strategy
 
         // Approve GoatVRF to spend tokens
         IERC20 token = IERC20(tokenAddress);
-        uint256 safetyMargin = fee * 3 / 2; // 50% safety margin
-        require(token.approve(goatVRF, safetyMargin), "Token approval failed");
+        // Since the underlying token is WGOATBTC (wrapped BTC in GOAT network), and the price is fetched from the price feed oracle in realtime,
+        // we need to ensure that the contract has enough allowance for the fee. So it is better to apply a safety margin
+        // to avoid any issues with gas price fluctuations. 50% is just a suggested value, you can adjust it as needed.
+        // If you do not want to approve the token every time, you can also approve all of your budget at once.
+        // Even if you approved the contract with a higher amount, the fee will be calculated based on
+        // the gas price at the time of the request and actual usage, so you will not be charged more than the fee.
+        uint256 safetyMargin = fee * 3 / 2;
+        token.forceApprove(goatVRF, safetyMargin);
 
         // Get beacon for deadline calculation
         IDrandBeacon beacon = IDrandBeacon(IGoatVRF(goatVRF).beacon());
 
         // Request randomness with appropriate deadline
         uint256 deadline = block.timestamp + beacon.period();
-        requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, 600000);
+        requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, callbackGas);
     }
 
     /**
