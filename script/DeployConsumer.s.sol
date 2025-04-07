@@ -15,6 +15,7 @@ contract DeployConsumer is Script {
         // Load configuration from environment variables
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address goatVRFAddress = vm.envAddress("GOATVRF_ADDRESS");
+        address deployer = vm.addr(deployerPrivateKey);
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -27,7 +28,7 @@ contract DeployConsumer is Script {
         console.log("Fee token address:", tokenAddress);
 
         // Get the balance of the token
-        uint256 balance = IERC20(tokenAddress).balanceOf(msg.sender);
+        uint256 balance = IERC20(tokenAddress).balanceOf(deployer);
         console.log("Fee token balance:", balance);
 
         // Set max gas price and gas used for estimation

@@ -210,7 +210,23 @@ GOAT VRF supports two types of fee rules:
 | Request Expire Time   | 604800                                                        |
 | GoatVRF Proxy         | 0xa3aeBE2F0d9daDac9E8111D9D41671A510FFB2ca                     |
 
-- **Mainnet**: `TBD`
+- **Mainnet**: 
+
+| Property              | Value                                                         |
+|-----------------------|---------------------------------------------------------------|
+| Fee Token             | 0xbC10000000000000000000000000000000000000                     |
+| Beacon Type           | BN254                                                         |
+| Beacon                | 0x0EaC9f6B63263038268c675FF7C9Bff6C8B30F76                     |
+| Fee Rule Type         | APRO_BTC                                                      |
+| Fee Rule              | 0x9F71E5Ac47cb1D38DA2eEf4baF0C879C8282C60f                     |
+| Target Value          | 10000000                                                      |
+| Price Feed            | 0xB587aB45a92e19eE3e0d483bc629DE75Ed575025                     |
+| Fee Recipient         | 0x53D0A68ed81698239831cd0A09813771A37E7f8F                     |
+| Relayer               | 0x9DaFB0DC6DCDcD4176a5C420F43C15eBe26305B3                     |
+| Overhead Gas          | 200000                                                        |
+| Max Deadline Delta    | 604800                                                        |
+| Request Expire Time   | 604800                                                        |
+| GoatVRF Proxy         | 0x0b481e6133B4e1c489995bF867CA6E5b562c858B                     |
 
 ## Further Information
 
