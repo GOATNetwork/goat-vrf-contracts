@@ -204,7 +204,7 @@ GOAT VRF supports two types of fee rules:
 | Fee Rule Type       | APRO_BTC                                       |
 | Fee Rule            | ~~0x647063E7eb8ee8163aDF45B18e149A093e3C8e37~~ |
 | Fee Rule            | 0x34fd84eCbFf7B8369b61A34CB6B5666AD3a05F97     |
-| Target Value        | 10000000                                       |
+| Target Value        | 1000000                                       |
 | Price Feed          | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef     |
 | Fee Recipient       | 0xF51d148D4A7ae851c1d5641763081023938c6342     |
 | Relayer             | 0x5C71d12522c454689A6A1653A99A44Bd5Fa4A65B     |
@@ -223,7 +223,7 @@ GOAT VRF supports two types of fee rules:
 | Fee Rule Type       | APRO_BTC                                       |
 | Fee Rule            | ~~0x9F71E5Ac47cb1D38DA2eEf4baF0C879C8282C60f~~ |
 | Fee Rule            | 0xAD2aE757e15BA11e87ad24589bCA077ABE93328C     |
-| Target Value        | 10000000                                       |
+| Target Value        | 1000000                                       |
 | Price Feed          | 0xB587aB45a92e19eE3e0d483bc629DE75Ed575025     |
 | Fee Recipient       | 0x53D0A68ed81698239831cd0A09813771A37E7f8F     |
 | Relayer             | 0x9DaFB0DC6DCDcD4176a5C420F43C15eBe26305B3     |
