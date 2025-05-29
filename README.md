@@ -6,9 +6,9 @@ GOAT VRF is a decentralized randomness solution that utilizes the [drand network
 
 GOAT VRF consists of the following components:
 
-- **GoatVRF Contract**: On-chain contract that verifies the randomness proofs and makes them available to consumer contracts.
-- **Oracle Service**: Off-chain service that retrieves randomness proofs from the drand network and submits them to the blockchain.
-- **Consumer Contracts**: Your contracts that integrate with GoatVRF to request and receive random values.
+-   **GoatVRF Contract**: On-chain contract that verifies the randomness proofs and makes them available to consumer contracts.
+-   **Oracle Service**: Off-chain service that retrieves randomness proofs from the drand network and submits them to the blockchain.
+-   **Consumer Contracts**: Your contracts that integrate with GoatVRF to request and receive random values.
 
 ## Integration Guide
 
@@ -25,10 +25,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract MyRandomContract is IRandomnessCallback {
     using SafeERC20 for IERC20;
-   
+
     // GoatVRF contract address
     address public goatVRF;
-    
+
     constructor(address goatVRF_) {
         goatVRF = goatVRF_;
     }
@@ -69,7 +69,7 @@ contract MyRandomContract is IRandomnessCallback {
       uint256 deadline = block.timestamp + beacon.period();
       requestId = IGoatVRF(goatVRF).getNewRandom(deadline, maxAllowedGasPrice, callbackGas);
    }
-    
+
     /**
      * @dev Callback function used by GoatVRF to deliver randomness
      * @param requestId Unique identifier for the randomness request
@@ -78,7 +78,7 @@ contract MyRandomContract is IRandomnessCallback {
     function receiveRandomness(uint256 requestId, uint256 randomness) external override {
         // Only GoatVRF can call this function, make sure you add this check
         require(msg.sender == goatVRF, "Only GoatVRF can fulfill randomness");
-        
+
         // Use randomness in your application
         // For example: selectWinner(randomness);
     }
@@ -118,9 +118,10 @@ interface IGoatVRF {
 ### 2. How GOAT VRF Works
 
 1. Your contract calls `requestRandomness()` on the GoatVRF contract, providing:
-   - A deadline by which the randomness must be fulfilled
-   - A maximum gas price you're willing to pay for the callback
-   - A gas limit for your callback function
+
+    - A deadline by which the randomness must be fulfilled
+    - A maximum gas price you're willing to pay for the callback
+    - A gas limit for your callback function
 
 2. The GoatVRF contract collects a fee in $WGOATBTC tokens to cover gas costs.
 
@@ -184,49 +185,52 @@ forge script script/Deploy.s.sol --rpc-url <your_rpc_url> --private-key <your_pr
 GOAT VRF supports two types of fee rules:
 
 1. **Fixed Fee Rule**: A simple fixed fee plus gas cost model.
-   - Configuration: Set `FEE_RULE_TYPE=FIXED` and `FIXED_FEE=amount` in your environment.
+
+    - Configuration: Set `FEE_RULE_TYPE=FIXED` and `FIXED_FEE=amount` in your environment.
 
 2. **APRO BTC Fee Rule**: A dynamic fee model based on APRO price feed for BTC/USD.
-   - Configuration: Set `FEE_RULE_TYPE=APRO_BTC`, `TARGET_VALUE=amount` (in USD with 8 decimals), and `PRICE_FEED=address` in your environment.
-   - This allows the fee to adjust automatically based on the current BTC price to maintain a consistent USD value.
+    - Configuration: Set `FEE_RULE_TYPE=APRO_BTC`, `TARGET_VALUE=amount` (in USD with 8 decimals), and `PRICE_FEED=address` in your environment.
+    - This allows the fee to adjust automatically based on the current BTC price to maintain a consistent USD value.
 
 ## Contract Deployments
 
-- **Testnet**: 
+-   **Testnet**:
 
-| Property              | Value                                                         |
-|-----------------------|---------------------------------------------------------------|
-| Fee Token             | 0xbC10000000000000000000000000000000000000                     |
-| Beacon Type           | BN254                                                         |
-| Beacon                | 0x46d74aB88fd5894F82d150ec18912aCC9df80663                     |
-| Fee Rule Type         | APRO_BTC                                                      |
-| Fee Rule              | 0x647063E7eb8ee8163aDF45B18e149A093e3C8e37                     |
-| Target Value          | 10000000                                                      |
-| Price Feed            | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef                     |
-| Fee Recipient         | 0xF51d148D4A7ae851c1d5641763081023938c6342                     |
-| Relayer               | 0x5C71d12522c454689A6A1653A99A44Bd5Fa4A65B                     |
-| Overhead Gas          | 200000                                                        |
-| Max Deadline Delta    | 604800                                                        |
-| Request Expire Time   | 604800                                                        |
-| GoatVRF Proxy         | 0xa3aeBE2F0d9daDac9E8111D9D41671A510FFB2ca                     |
+| Property            | Value                                          |
+| ------------------- | ---------------------------------------------- |
+| Fee Token           | 0xbC10000000000000000000000000000000000000     |
+| Beacon Type         | BN254                                          |
+| Beacon              | 0x46d74aB88fd5894F82d150ec18912aCC9df80663     |
+| Fee Rule Type       | APRO_BTC                                       |
+| Fee Rule            | ~~0x647063E7eb8ee8163aDF45B18e149A093e3C8e37~~ |
+| Fee Rule            | 0x34fd84eCbFf7B8369b61A34CB6B5666AD3a05F97     |
+| Target Value        | 10000000                                       |
+| Price Feed          | 0x0c98A1AAECE12D6815A02fD2A6d24652325FD6Ef     |
+| Fee Recipient       | 0xF51d148D4A7ae851c1d5641763081023938c6342     |
+| Relayer             | 0x5C71d12522c454689A6A1653A99A44Bd5Fa4A65B     |
+| Overhead Gas        | 200000                                         |
+| Max Deadline Delta  | 604800                                         |
+| Request Expire Time | 604800                                         |
+| GoatVRF Proxy       | 0xa3aeBE2F0d9daDac9E8111D9D41671A510FFB2ca     |
 
-- **Mainnet**: 
+-   **Mainnet**:
 
-| Property              | Value                                                         |
-|-----------------------|---------------------------------------------------------------|
-| Fee Token             | 0xbC10000000000000000000000000000000000000                     |
-| Beacon Type           | BN254                                                         |
-| Beacon                | 0x0EaC9f6B63263038268c675FF7C9Bff6C8B30F76                     |
-| Fee Rule Type         | APRO_BTC                                                      |
-| Fee Rule              | 0x9F71E5Ac47cb1D38DA2eEf4baF0C879C8282C60f                     |
-| Target Value          | 10000000                                                      |
-| Price Feed            | 0xB587aB45a92e19eE3e0d483bc629DE75Ed575025                     |
-| Fee Recipient         | 0x53D0A68ed81698239831cd0A09813771A37E7f8F                     |
-| Relayer               | 0x9DaFB0DC6DCDcD4176a5C420F43C15eBe26305B3                     |
-| Overhead Gas          | 200000                                                        |
-| Max Deadline Delta    | 604800                                                        |
-| Request Expire Time   | 604800                                                        |
-| GoatVRF Proxy         | 0x0b481e6133B4e1c489995bF867CA6E5b562c858B                     |
+| Property            | Value                                          |
+| ------------------- | ---------------------------------------------- |
+| Fee Token           | 0xbC10000000000000000000000000000000000000     |
+| Beacon Type         | BN254                                          |
+| Beacon              | 0x0EaC9f6B63263038268c675FF7C9Bff6C8B30F76     |
+| Fee Rule Type       | APRO_BTC                                       |
+| Fee Rule            | ~~0x9F71E5Ac47cb1D38DA2eEf4baF0C879C8282C60f~~ |
+| Fee Rule            | 0xAD2aE757e15BA11e87ad24589bCA077ABE93328C     |
+| Target Value        | 10000000                                       |
+| Price Feed          | 0xB587aB45a92e19eE3e0d483bc629DE75Ed575025     |
+| Fee Recipient       | 0x53D0A68ed81698239831cd0A09813771A37E7f8F     |
+| Relayer             | 0x9DaFB0DC6DCDcD4176a5C420F43C15eBe26305B3     |
+| Overhead Gas        | 200000                                         |
+| Max Deadline Delta  | 604800                                         |
+| Request Expire Time | 604800                                         |
+| GoatVRF Proxy       | 0x0b481e6133B4e1c489995bF867CA6E5b562c858B     |
 
 ## Further Information
 
