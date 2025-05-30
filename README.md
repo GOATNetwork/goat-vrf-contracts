@@ -191,6 +191,7 @@ GOAT VRF supports two types of fee rules:
 2. **APRO BTC Fee Rule**: A dynamic fee model based on APRO price feed for BTC/USD.
     - Configuration: Set `FEE_RULE_TYPE=APRO_BTC`, `TARGET_VALUE=amount` (in USD with 8 decimals), and `PRICE_FEED=address` in your environment.
     - This allows the fee to adjust automatically based on the current BTC price to maintain a consistent USD value.
+    - ***Important:*** The fee rule contract needs to grant permission by APRO. 
 
 ## Contract Deployments
 
